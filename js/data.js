@@ -30,6 +30,7 @@ function seedData() {
     { nome: 'Instalações', pct: d }, { nome: 'Acabamento', pct: e }
   ];
   const d = {
+    v: 2,
     empreendimentos: [
       { id: 'e1', nome: 'Residencial Império Park', tipo: 'Condomínio de apartamentos', cidade: 'São Paulo', bairro: 'Vila Mariana', unidades: 120, vendidas: 84, reservadas: 12, vgv: 54000000, entrega: off(420), status: 'Em obras' },
       { id: 'e2', nome: 'Villa Imperial Alphaville', tipo: 'Condomínio de casas', cidade: 'Barueri', bairro: 'Alphaville', unidades: 48, vendidas: 31, reservadas: 5, vgv: 38400000, entrega: off(300), status: 'Em obras' },
@@ -37,7 +38,7 @@ function seedData() {
       { id: 'e4', nome: 'Jardins do Império', tipo: 'Loteamento', cidade: 'Sorocaba', bairro: 'Campolim', unidades: 200, vendidas: 196, reservadas: 0, vgv: 24000000, entrega: off(-40), status: 'Entregue' }
     ],
     obras: [
-      { id: 'o1', nome: 'Império Park - Torre A', empId: 'e1', status: 'Em andamento', orcamento: 18500000, gasto: 11200000, inicio: off(-310), previsao: off(160), resp: 'Eng. Carlos Mendes', endereco: 'R. Domingos de Morais, 1200', etapas: etapas(100, 90, 62, 35, 8) },
+      { id: 'o1', nome: 'Império Park - Torre A', empId: 'e1', status: 'Em andamento', orcamento: 18500000, gasto: 12100000, inicio: off(-310), previsao: off(160), resp: 'Eng. Carlos Mendes', endereco: 'R. Domingos de Morais, 1200', etapas: etapas(100, 90, 62, 35, 8) },
       { id: 'o2', nome: 'Império Park - Torre B', empId: 'e1', status: 'Em andamento', orcamento: 17200000, gasto: 5400000, inicio: off(-150), previsao: off(300), resp: 'Eng. Carlos Mendes', endereco: 'R. Domingos de Morais, 1200', etapas: etapas(100, 55, 20, 5, 0) },
       { id: 'o3', nome: 'Villa Imperial - Fase 1', empId: 'e2', status: 'Em andamento', orcamento: 12800000, gasto: 9100000, inicio: off(-280), previsao: off(-12), resp: 'Eng. Juliana Prado', endereco: 'Al. Rio Negro, 800', etapas: etapas(100, 100, 85, 60, 35) },
       { id: 'o4', nome: 'Torre Business - Fundação', empId: 'e3', status: 'Planejamento', orcamento: 21000000, gasto: 380000, inicio: off(25), previsao: off(560), resp: 'Eng. Rafael Torres', endereco: 'Av. Júlio de Mesquita, 500', etapas: etapas(5, 0, 0, 0, 0) },
@@ -96,12 +97,7 @@ function seedData() {
       { id: 't5', titulo: 'Comprar EPIs (capacetes)', obraId: 'o1', prio: 'Média', status: 'Aberta', prazo: off(7) },
       { id: 't6', titulo: 'Entrega das chaves - Jardins', obraId: 'o5', prio: 'Baixa', status: 'Resolvida', prazo: off(-30) }
     ],
-    lancamentos: [
-      ...[-5, -4, -3, -2, -1, 0].flatMap((m, i) => [
-        { id: 'r' + i, data: monthOff(m), desc: 'Vendas de unidades', tipo: 'Receita', valor: [3.1, 3.8, 3.4, 4.6, 4.2, 5.1][i] * 1e6, obraId: '' },
-        { id: 'd' + i, data: monthOff(m), desc: 'Materiais e mão de obra', tipo: 'Despesa', valor: [2.6, 2.9, 3.3, 3.5, 3.4, 3.9][i] * 1e6, obraId: '' }
-      ])
-    ]
+    lancamentos: seedLancamentos()
   };
   const feitos = { o1: [5, 1], o2: [3, 1], o3: [6, 1], o4: [0, 0], o5: [9, 0], o6: [2, 0] };
   d.obras.forEach(o => { const f = feitos[o.id] || [0, 0]; o.passos = mkPassos(o, f[0], !!f[1]); delete o.etapas; });
@@ -115,4 +111,44 @@ function seedData() {
     { id: 'c7', obraId: 'o6', nome: 'Empreitada do clube', empresa: 'Lazer & Obras Ltda', tipo: 'Empreitada', status: 'Rascunho', valor: 1500000, pago: 0, inicio: off(10), fim: off(190), obs: 'Aguardando retomada da obra' }
   ];
   return d;
+}
+
+// Lançamentos de exemplo: 12 meses; receitas ligadas ao empreendimento e despesas à obra.
+// Os totais mensais dos 6 últimos meses são os mesmos da versão 1 do exemplo.
+function seedLancamentos() {
+  const rec = [2.2, 2.5, 2.4, 2.9, 2.8, 3.0, 3.1, 3.8, 3.4, 4.6, 4.2, 5.1].map(x => x * 1e6);
+  const dsp = [1.9, 2.1, 2.4, 2.2, 2.6, 2.7, 2.6, 2.9, 3.3, 3.5, 3.4, 3.9].map(x => x * 1e6);
+  const wRec = { e1: .5, e2: .28, e3: .1, e4: .12 }, wDsp = { o1: .34, o2: .22, o3: .26, o4: .03, o5: .09, o6: .06, '': .08 };
+  const nomeE = { e1: 'Império Park', e2: 'Villa Imperial', e3: 'Torre Business', e4: 'Jardins do Império' };
+  // meses (relativos a hoje) em que cada obra/empreendimento tem movimento
+  const onR = (k, m) => k !== 'e3' || m >= -4;
+  const onD = (k, m) => ({ o1: m >= -10, o2: m >= -5, o3: m >= -9, o4: m >= -1, o5: m <= -2, o6: m >= -3 && m <= -1, '': true }[k]);
+  const out = [];
+  const split = (total, w, on, m, make) => {
+    const ks = Object.keys(w).filter(k => on(k, m)), sw = ks.reduce((s, k) => s + w[k], 0); let left = total;
+    ks.forEach((k, j) => { const v = j === ks.length - 1 ? left : Math.round(total * w[k] / sw / 1000) * 1000; left -= v; out.push(make(k, v)); });
+  };
+  for (let i = 0; i < 12; i++) {
+    const m = i - 11, data = monthOff(m);
+    split(rec[i], wRec, onR, m, (k, v) => ({ id: 'r' + i + k, data, desc: 'Vendas — ' + nomeE[k], tipo: 'Receita', valor: v, obraId: '', empId: k }));
+    split(dsp[i], wDsp, onD, m, (k, v) => ({ id: 'd' + i + k, data, desc: k ? 'Materiais e mão de obra' : 'Despesas administrativas', tipo: 'Despesa', valor: v, obraId: k, empId: '' }));
+  }
+  return out;
+}
+
+// Atualiza dados salvos no navegador sem mexer no que o usuário cadastrou:
+// só troca os lançamentos se ainda forem exatamente os do exemplo antigo (versão 1).
+function migrateData(S) {
+  if ((S.v || 1) >= 2) return false;
+  const R = [3.1, 3.8, 3.4, 4.6, 4.2, 5.1], D = [2.6, 2.9, 3.3, 3.5, 3.4, 3.9];
+  const intacto = Array.isArray(S.lancamentos) && S.lancamentos.length === 12 && S.lancamentos.every(l => {
+    const m = /^([rd])([0-5])$/.exec(l.id); if (!m) return false;
+    return !l.obraId && !l.empId && l.valor === (m[1] === 'r' ? R : D)[+m[2]] * 1e6;
+  });
+  if (intacto) {
+    S.lancamentos = seedLancamentos();
+    const o1 = (S.obras || []).find(o => o.id === 'o1'); if (o1 && o1.gasto === 11200000) o1.gasto = 12100000;
+  }
+  S.v = 2;
+  return true;
 }
