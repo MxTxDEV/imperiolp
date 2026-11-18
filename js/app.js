@@ -496,7 +496,7 @@ const NAV = [['dashboard', '📊', 'Painel geral'], ['obras', '🏗️', 'Obras'
 const route = () => { const r = (location.hash.replace('#/', '') || 'dashboard'); return PAGES[r] ? r : 'dashboard'; };
 function render() {
   const r = route();
-  $('#nav').innerHTML = NAV.map(([k, i, l]) => `<a href="#/${k}" class="${k === r ? 'on' : ''}"><i>${i}</i>${l}${k === 'estoque' && S.materiais.some(low) ? `<em>${S.materiais.filter(low).length}</em>` : ''}${k === 'tarefas' && S.tarefas.some(t => t.status !== 'Resolvida') ? `<em style="background:var(--blue)">${S.tarefas.filter(t => t.status !== 'Resolvida').length}</em>` : ''}</a>`).join('');
+  $('#nav').innerHTML = NAV.map(([k, i, l]) => `<a href="#/${k}" class="${k === r ? 'on' : ''}" title="${l}"${k === r ? ' aria-current="page"' : ''}><i>${i}</i><span class="lbl">${l}</span>${k === 'estoque' && S.materiais.some(low) ? `<em>${S.materiais.filter(low).length}</em>` : ''}${k === 'tarefas' && S.tarefas.some(t => t.status !== 'Resolvida') ? `<em style="background:var(--blue)">${S.tarefas.filter(t => t.status !== 'Resolvida').length}</em>` : ''}</a>`).join('');
   $('#view').innerHTML = PAGES[r]();
   const n = alerts().length; $('#bellN').textContent = n; $('#bellN').style.display = n ? '' : 'none';
   document.title = 'Império ERP | ' + (NAV.find(x => x[0] === r) || [])[2];
@@ -538,6 +538,9 @@ function exportCSV(k) {
 }
 $('#btnQuick').onclick = quick;
 $('#btnBell').onclick = () => modal('🔔 Alertas e pendências', alertList(alerts(), '✅ Nenhuma pendência!'));
+let pinned = false; try { pinned = localStorage.getItem('imperio_pin') === '1'; } catch (e) {}
+const setPin = v => { pinned = v; document.querySelector('.app').classList.toggle('pinned', v); $('#btnPin').setAttribute('aria-pressed', v); $('#btnPin').title = v ? 'Recolher menu' : 'Fixar menu aberto'; try { localStorage.setItem('imperio_pin', v ? '1' : '0'); } catch (e) {} };
+setPin(pinned); $('#btnPin').onclick = () => setPin(!pinned);
 $('#btnMenu').onclick = () => $('#side').classList.toggle('open');
 $('#btnReset').onclick = () => confirmBox('Restaurar os dados de exemplo? Todos os dados que você cadastrou serão substituídos.', () => { S = seedData(); save(); render(); toast('Dados de exemplo restaurados'); }, 'Restaurar');
 let theme = 'dark'; try { theme = localStorage.getItem('imperio_theme') || 'dark'; } catch (e) {}

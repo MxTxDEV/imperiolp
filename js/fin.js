@@ -73,8 +73,8 @@ function delta(cur, prev, goodUp, fmt) {
 function spark(vals, color) {
   if (vals.length < 2) return '';
   const w = 84, h = 26, mn = Math.min(...vals), mx = Math.max(...vals), sp = mx - mn || 1;
-  const pts = vals.map((v, i) => `${(i / (vals.length - 1) * w).toFixed(1)},${(h - 3 - (v - mn) / sp * (h - 6)).toFixed(1)}`).join(' ');
-  return `<svg class="fn-sp" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="0,${h} ${pts} ${w},${h}" style="fill:${color};opacity:.12"/><polyline points="${pts}" fill="none" style="stroke:${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  const pts = vals.map((v, i) => [i / (vals.length - 1) * w, h - 3 - (v - mn) / sp * (h - 6)]), d = smooth(pts), last = pts[pts.length - 1];
+  return `<svg class="fn-sp" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d}L${w},${h}L0,${h}Z" style="fill:${color};opacity:.14"/><path d="${d}" fill="none" style="stroke:${color}" stroke-width="2" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="2.6" style="fill:${color}"/></svg>`;
 }
 function numbers(M) {
   const ms = M.months, f = C.brlS;
@@ -90,6 +90,18 @@ function numbers(M) {
 }
 
 /* ---------- gráficos ---------- */
+// barra com cantos de cima arredondados (base reta no eixo)
+function tb(x, y, w, h, r = 5) { r = Math.min(r, w / 2, h); return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; }
+// linha suave (Catmull-Rom -> Bézier)
+function smooth(pts) {
+  if (pts.length < 3) return 'M' + pts.map(p => p.join(',')).join('L');
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) { const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    d += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`; }
+  return d;
+}
+// gradiente vertical: cor forte em cima, mais transparente embaixo
+const vg = (id, c, a = .35) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${c}"/><stop offset="1" style="stop-color:${c};stop-opacity:${a}"/></linearGradient>`;
 const card = (title, sub, body, cls = '') => `<section class="card fc ${cls}"><h4><span>${title}</span>${sub ? `<small>${sub}</small>` : ''}</h4>${body}</section>`;
 function yScale(vals, top, bottom) { const mx = Math.max(0, ...vals), mn = Math.min(0, ...vals), sp = (mx - mn) || 1; return { Y: v => top + (mx - v) / sp * (bottom - top), mx, mn }; }
 function grid(Y, mx, mn, pl, W) {
@@ -101,14 +113,14 @@ function fluxo(M) {
   const ms = M.months, W = 640, H = 220, pl = 46, pt = 12, pb = 26, n = ms.length;
   const { Y, mx, mn } = yScale(ms.flatMap(x => [x.r, x.d, x.res, x.pres]), pt, H - pb);
   const slot = (W - pl - 6) / n, bw = Math.min(26, slot * .3), X = i => pl + slot * i + slot / 2;
-  let g = grid(Y, mx, mn, pl, W) + `<line x1="${pl}" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="zl"/>`;
+  let g = `<defs>${vg('fgR', 'var(--c3)', .25)}${vg('fgD', 'var(--c6)', .25)}</defs>` + grid(Y, mx, mn, pl, W) + `<line x1="${pl}" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="zl"/>`;
   ms.forEach((x, i) => {
     const on = st.mes === x.k, dim = st.mes && !on ? ' dim' : '';
-    g += `<rect class="fb gr${dim}" x="${X(i) - bw - 1}" y="${Y(x.r)}" width="${bw}" height="${Math.max(0, Y(0) - Y(x.r))}" rx="3" style="fill:var(--c3)"/>`;
-    g += `<rect class="fb gr${dim}" x="${X(i) + 1}" y="${Y(x.d)}" width="${bw}" height="${Math.max(0, Y(0) - Y(x.d))}" rx="3" style="fill:var(--c6)"/>`;
+    g += `<path class="fb gr${dim}" d="${tb(X(i) - bw - 2, Y(x.r), bw, Math.max(0, Y(0) - Y(x.r)))}" fill="url(#fgR)"/>`;
+    g += `<path class="fb gr${dim}" d="${tb(X(i) + 2, Y(x.d), bw, Math.max(0, Y(0) - Y(x.d)))}" fill="url(#fgD)"/>`;
     g += `<text x="${X(i)}" y="${H - 8}" text-anchor="middle" class="ax${on ? ' on' : ''}">${mShort(x.k)}</text>`;
   });
-  const line = (k, cls) => `<polyline points="${ms.map((x, i) => `${X(i)},${Y(x[k])}`).join(' ')}" class="${cls}"/>`;
+  const line = (k, cls) => `<path d="${smooth(ms.map((x, i) => [X(i), Y(x[k])]))}" class="${cls}"/>`;
   g += line('pres', 'ln prev') + line('res', 'ln res') + ms.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.res)}" r="3.5" class="dot"/>`).join('');
   ms.forEach((x, i) => { g += `<rect class="hit" x="${X(i) - slot / 2}" y="${pt}" width="${slot}" height="${H - pb - pt}" ${act('mes', x.k)} ${tip(mLong(x.k), 'Receitas: ' + C.brl(x.r), 'Despesas: ' + C.brl(x.d), 'Resultado: ' + C.brl(x.res) + (x.m != null ? ` (margem ${fp(x.m)})` : ''), 'Mesmo mês do período anterior: ' + C.brl(x.pres), st.mes === x.k ? 'Clique para limpar o filtro' : 'Clique para ver os lançamentos do mês')}/>`; });
   return `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img" aria-label="Receitas, despesas e resultado por mês">${g}</svg>
@@ -123,12 +135,12 @@ function cascata(M) {
   steps.push({ l: 'Resultado', v: cur, a: Math.min(0, cur), b: Math.max(0, cur), c: cur >= 0 ? 'var(--gold)' : 'var(--red)' });
   const W = 380, H = 210, pl = 6, pt = 18, pb = 40, n = steps.length, slot = (W - pl * 2) / n, bw = slot * .62;
   const { Y } = yScale(steps.flatMap(s => [s.a, s.b]), pt, H - pb);
-  let g = `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="zl"/>`;
+  let g = `<defs>${steps.map((s, i) => vg('fgW' + i, s.c, .4)).join('')}</defs><line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="zl"/>`;
   steps.forEach((s, i) => {
     const x = pl + slot * i + (slot - bw) / 2, y = Y(s.b), h = Math.max(1.5, Y(s.a) - Y(s.b));
     if (i < n - 1) { const lv = i === 0 ? s.b : s.a; g += `<line x1="${x + bw}" x2="${x + slot}" y1="${Y(lv)}" y2="${Y(lv)}" class="cn"/>`; }
     const on = s.cat && st.cat === s.cat;
-    g += `<rect class="fb gr${st.cat && s.cat && !on ? ' dim' : ''}" x="${x}" y="${y}" width="${bw}" height="${h}" rx="3" style="fill:${s.c}" ${s.cat ? act('cat', s.cat) : ''} ${tip(s.l, C.brl(Math.abs(s.v)), i && i < n - 1 ? fp(Math.abs(s.v) / (M.R || 1)) + ' das receitas' : '', s.cat ? 'Clique para filtrar' : '')}/>`;
+    g += `<path class="fb gr${st.cat && s.cat && !on ? ' dim' : ''}" d="${tb(x, y, bw, h, 6)}" fill="url(#fgW${i})" ${s.cat ? act('cat', s.cat) : ''} ${tip(s.l, C.brl(Math.abs(s.v)), i && i < n - 1 ? fp(Math.abs(s.v) / (M.R || 1)) + ' das receitas' : '', s.cat ? 'Clique para filtrar' : '')}/>`;
     g += `<text x="${x + bw / 2}" y="${y - 5}" text-anchor="middle" class="vl">${s.v < 0 ? '−' : ''}${C.brlS(Math.abs(s.v)).replace('R$ ', '')}</text>`;
     g += `<text x="${x + bw / 2}" y="${H - pb + 14}" text-anchor="middle" class="ax">${E(short(s.l.replace('Obras (materiais e mão de obra)', 'Obras'), 11))}</text>`;
   });
@@ -137,7 +149,7 @@ function cascata(M) {
 
 function donut(M) {
   const t = M.D || 1, R = 46, CC = 2 * Math.PI * R; let off = 0;
-  const arcs = M.catD.map((c, i) => { const len = c.v / t * CC, on = st.cat === c.k, s = `<circle r="${R}" cx="64" cy="64" fill="none" stroke-width="${on ? 20 : 16}" class="slice" style="stroke:${CAT_COR[i % CAT_COR.length]};opacity:${st.cat && !on ? .3 : 1}" stroke-dasharray="${len} ${CC - len}" stroke-dashoffset="${-off}" transform="rotate(-90 64 64)" ${act('cat', c.k)} ${tip(c.k, C.brl(c.v), fp(c.v / t) + ' das despesas', 'Clique para filtrar')}/>`; off += len; return s; }).join('');
+  const ring = `<circle r="${R}" cx="64" cy="64" fill="none" stroke-width="14" style="stroke:var(--panel2)"/>`, arcs = ring + M.catD.map((c, i) => { const len = c.v / t * CC, on = st.cat === c.k, s = `<circle r="${R}" cx="64" cy="64" fill="none" stroke-width="${on ? 18 : 14}" stroke-linecap="round" class="slice" style="stroke:${CAT_COR[i % CAT_COR.length]};opacity:${st.cat && !on ? .3 : 1}" stroke-dasharray="${Math.max(.1, len - (M.catD.length > 1 ? 9 : 0))} ${CC - len + (M.catD.length > 1 ? 9 : 0)}" stroke-dashoffset="${-off}" transform="rotate(-90 64 64)" ${act('cat', c.k)} ${tip(c.k, C.brl(c.v), fp(c.v / t) + ' das despesas', 'Clique para filtrar')}/>`; off += len; return s; }).join('');
   if (!M.catD.length) return '<p class="empty sm">Sem despesas no período.</p>';
   return `<div class="dn"><svg viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Despesas por categoria">${arcs}<text x="64" y="62" text-anchor="middle" class="dn-v">${C.brlS(M.D).replace('R$ ', '')}</text><text x="64" y="77" text-anchor="middle" class="ax">despesas</text></svg>
     <div class="dn-l">${M.catD.map((c, i) => `<div class="dn-r ${st.cat === c.k ? 'on' : ''}" ${act('cat', c.k)}><i style="background:${CAT_COR[i % CAT_COR.length]}"></i><span>${E(c.k)}</span><b>${Math.round(c.v / t * 100)}%</b></div>`).join('')}</div></div>`;
@@ -146,10 +158,10 @@ function donut(M) {
 function acumulado(M) {
   const ms = M.months, W = 380, H = 160, pl = 44, pt = 12, pb = 22, n = ms.length;
   const { Y, mx, mn } = yScale(ms.map(x => x.acc), pt, H - pb), X = i => pl + (W - pl - 8) * (n === 1 ? .5 : i / (n - 1));
-  const pts = ms.map((x, i) => `${X(i)},${Y(x.acc)}`).join(' '), last = ms[n - 1];
+  const pp = ms.map((x, i) => [X(i), Y(x.acc)]), d = smooth(pp), last = ms[n - 1];
   const g = grid(Y, mx, mn, pl, W) + `<line x1="${pl}" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="zl"/>
     <defs><linearGradient id="fAcc" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color:var(--gold);stop-opacity:.45"/><stop offset="1" style="stop-color:var(--gold);stop-opacity:0"/></linearGradient></defs>
-    <polygon points="${X(0)},${Y(0)} ${pts} ${X(n - 1)},${Y(0)}" fill="url(#fAcc)" class="ar"/><polyline points="${pts}" class="ln acc"/>` +
+    <path d="${d}L${X(n - 1)},${Y(0)}L${X(0)},${Y(0)}Z" fill="url(#fAcc)" class="ar"/><path d="${d}" class="ln acc"/>` +
     ms.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.acc)}" r="${i === n - 1 ? 5 : 3}" class="dot" ${tip(mLong(x.k), 'Acumulado: ' + C.brl(x.acc), 'No mês: ' + C.brl(x.res))}/>`).join('') +
     ms.map((x, i) => i % Math.ceil(n / 6) === 0 || i === n - 1 ? `<text x="${X(i)}" y="${H - 6}" text-anchor="middle" class="ax">${mShort(x.k)}</text>` : '').join('');
   return `<div class="big-n ${last.acc < 0 ? 'down' : ''}">${C.brlS(last.acc)}<small>acumulado no período</small></div><svg class="ch" viewBox="0 0 ${W} ${H}" role="img" aria-label="Resultado acumulado">${g}</svg>`;
@@ -158,10 +170,10 @@ function acumulado(M) {
 function margem(M) {
   const ms = M.months, W = 380, H = 160, pl = 8, pt = 18, pb = 22, n = ms.length, slot = (W - pl * 2) / n, bw = slot * .56;
   const vals = ms.map(x => x.m == null ? 0 : x.m), { Y } = yScale(vals, pt, H - pb);
-  let g = `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="zl"/>`;
+  let g = `<defs>${vg('fgM', 'var(--c4)', .3)}</defs><line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="zl"/>`;
   ms.forEach((x, i) => {
     const v = vals[i], xx = pl + slot * i + (slot - bw) / 2, y = Math.min(Y(v), Y(0)), h = Math.max(1.5, Math.abs(Y(v) - Y(0)));
-    g += `<rect class="fb gr" x="${xx}" y="${y}" width="${bw}" height="${h}" rx="3" style="fill:${x.m == null ? 'var(--line)' : v >= 0 ? 'var(--c4)' : 'var(--red)'}" ${tip(mLong(x.k), x.m == null ? 'Sem receita no mês: margem não se aplica' : 'Margem: ' + fp(x.m))}/>`;
+    g += `<path class="fb gr" d="${v >= 0 ? tb(xx, y, bw, h, 6) : `M${xx},${y}H${xx + bw}V${y + h}H${xx}Z`}" fill="${x.m == null ? 'var(--line)' : v >= 0 ? 'url(#fgM)' : 'var(--red)'}" ${tip(mLong(x.k), x.m == null ? 'Sem receita no mês: margem não se aplica' : 'Margem: ' + fp(x.m))}/>`;
     if (n <= 12 && x.m != null) g += `<text x="${xx + bw / 2}" y="${v >= 0 ? y - 4 : y + h + 10}" text-anchor="middle" class="vl">${Math.round(v * 100)}%</text>`;
     g += `<text x="${xx + bw / 2}" y="${H - 6}" text-anchor="middle" class="ax">${n > 6 ? mShort(x.k).slice(0, 1) : mShort(x.k)}</text>`;
   });
@@ -171,7 +183,7 @@ function margem(M) {
 function hbars(items, total, color, k, nameOf) {
   if (!items.length) return '<p class="empty sm">Sem lançamentos no período.</p>';
   const mx = items[0].v || 1;
-  return `<div class="hb">${items.slice(0, 6).map(x => { const on = k && st[k] === x.k, name = nameOf(x.k); return `<div class="hb-r ${on ? 'on' : ''} ${k && st[k] && !on ? 'dim' : ''}" ${k ? act(k, x.k) : ''} ${tip(name, C.brl(x.v), fp(x.v / (total || 1)) + ' do total', k ? 'Clique para filtrar' : '')}><span class="hb-n">${E(name)}</span><span class="hb-t"><i class="gw" style="width:${(x.v / mx * 100).toFixed(1)}%;background:${color}"></i></span><b>${C.brlS(x.v)}</b></div>`; }).join('')}</div>`;
+  return `<div class="hb">${items.slice(0, 6).map(x => { const on = k && st[k] === x.k, name = nameOf(x.k); return `<div class="hb-r ${on ? 'on' : ''} ${k && st[k] && !on ? 'dim' : ''}" ${k ? act(k, x.k) : ''} ${tip(name, C.brl(x.v), fp(x.v / (total || 1)) + ' do total', k ? 'Clique para filtrar' : '')}><span class="hb-n">${E(name)}</span><span class="hb-t"><i class="gw" style="width:${(x.v / mx * 100).toFixed(1)}%;background:linear-gradient(90deg,color-mix(in srgb,${color} 35%,transparent),${color})"></i></span><b>${C.brlS(x.v)}</b></div>`; }).join('')}</div>`;
 }
 
 function contratos(M) {
