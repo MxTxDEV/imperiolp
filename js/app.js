@@ -328,66 +328,95 @@ function syncObra(o) {
   else if (o.status === 'Planejamento' && ps.some(x => x.status !== 'Pendente')) o.status = 'Em andamento';
 }
 
+const stat = (l, v, cls = '', sub = '') => `<div class="an-stat"><small>${l}</small><b class="${cls}">${v}</b>${sub ? `<span>${sub}</span>` : ''}</div>`;
+const ring = (p, size = 92) => { const r = size / 2 - 7, c = 2 * Math.PI * r, len = c * p / 100; return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" class="an-ring"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="8" style="stroke:var(--panel2)"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="8" stroke-linecap="round" style="stroke:${p === 100 ? 'var(--green)' : 'var(--gold)'}" stroke-dasharray="${len} ${c}" transform="rotate(-90 ${size / 2} ${size / 2})"/><text x="50%" y="50%" dy=".35em" text-anchor="middle" style="fill:var(--txt);font:700 ${size / 4.6}px Sora,sans-serif">${p}%</text></svg>`; };
+
 PAGES.andamento = () => {
-  const id = curObraId(), head = header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.', '');
-  if (!id) return head + '<div class="card empty">Cadastre uma obra primeiro.</div>';
+  const id = curObraId();
+  if (!id) return header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.') + '<div class="card empty">Cadastre uma obra primeiro.</div>';
   const o = by(S.obras, id), tab = state.tab.and || 'Passos', ps = o.passos || [], p = prog(o);
   const done = ps.filter(x => x.status === 'Concluído').length, late = ps.filter(passoLate).length;
   const prevT = ps.reduce((s, x) => s + passoCost(x), 0), cts = S.contratos.filter(c => c.obraId === id);
   const cVal = cts.reduce((s, c) => s + c.valor, 0), cPago = cts.reduce((s, c) => s + c.pago, 0), dias = daysTo(o.previsao);
-  const sel = `<div class="osel">${S.obras.map(x => `<button class="${x.id === id ? 'on' : ''}" data-act="selObra" data-id="${x.id}"><div class="row"><b>${esc(x.nome)}</b><span>${prog(x)}%</span></div>${bar(prog(x), x.status === 'Concluída' ? 'g' : '')}</button>`).join('')}</div>`;
-  const hero = `<div class="card" style="margin-bottom:18px"><div class="row" style="align-items:flex-start;flex-wrap:wrap"><div><h2 style="font-size:1.35rem">${esc(o.nome)}</h2><p class="mut sm">${esc(nm(S.empreendimentos, o.empId))} · Resp.: ${esc(o.resp || '—')} · ${dt(o.inicio)} → ${dt(o.previsao)}</p></div>${pill(o.status)}</div>
-    <div class="bigbar ${p === 100 ? 'ok' : ''}"><i style="width:${p}%"></i><span>${p}% concluído</span></div>
-    <div class="row sm mut" style="margin-top:8px"><span>${done} de ${ps.length} passos concluídos</span><span>${dias >= 0 ? 'Faltam ' + dias + ' dias para o prazo final' : '<b class="down">' + (-dias) + ' dias além do prazo</b>'}</span></div></div>`;
-  const kp = `<div class="grid g-kpi">${kpi('✅', 'green', done + '/' + ps.length, 'Passos concluídos')}${kpi('⏰', late ? 'red' : 'blue', late, 'Passos atrasados')}${kpi('💰', prevT > o.orcamento ? 'red' : 'gold', brlS(prevT), 'Custo previsto nos passos', `<span class="mut">Orçamento da obra: ${brlS(o.orcamento)}</span>`)}${kpi('📑', 'purple', cts.length, 'Contratos', `<span class="mut">${brlS(cVal)} · pago ${brlS(cPago)}</span>`)}</div>`;
-  const tabs = ['Passos', 'Materiais e custos', 'Contratos', 'Cronograma'], ic = { 'Passos': '🪜', 'Materiais e custos': '📦', 'Contratos': '📑', 'Cronograma': '📅' };
-  const tb = `<div class="chips">${tabs.map(t => `<button class="chip ${tab === t ? 'on' : ''}" data-act="tab" data-k="and" data-v="${t}">${ic[t]} ${t}</button>`).join('')}</div>`;
+  const strip = `<div class="an-strip" role="tablist" aria-label="Obras">${S.obras.map(x => { const px = prog(x); return `<button class="an-o ${x.id === id ? 'on' : ''}" data-act="selObra" data-id="${x.id}" role="tab" aria-selected="${x.id === id}"><span class="an-o-n">${esc(x.nome)}</span><span class="an-o-p">${px}%</span><i style="--w:${px}%" class="${px === 100 ? 'ok' : (x.passos || []).some(passoLate) && x.status === 'Em andamento' ? 'late' : ''}"></i></button>`; }).join('')}</div>`;
+  const head = `<div class="card an-head">
+    <div class="an-title"><div><h2>${esc(o.nome)}</h2><p>${esc(nm(S.empreendimentos, o.empId))} · ${esc(o.resp || '—')} · ${dt(o.inicio)} → ${dt(o.previsao)}</p></div>${pill(o.status)}</div>
+    <div class="an-bar ${p === 100 ? 'ok' : ''}"><i style="width:${p}%"></i></div>
+    <div class="an-stats">${stat('Avanço', p + '%', '', `${done} de ${ps.length} passos`)}${stat('Atrasados', late, late ? 'down' : '', late ? 'passo(s) fora do prazo' : 'nenhum')}${stat('Prazo final', dias >= 0 ? dias + ' dias' : -dias + ' dias', dias < 0 ? 'down' : '', dias >= 0 ? 'restantes' : 'de atraso')}${stat('Previsto', brlS(prevT), prevT > o.orcamento ? 'down' : '', 'de ' + brlS(o.orcamento) + ' orçados')}${stat('Contratos', brlS(cVal), '', cts.length + ' · pago ' + brlS(cPago))}</div></div>`;
+  const tabs = ['Passos', 'Materiais e custos', 'Contratos', 'Cronograma'];
+  const tb = `<div class="an-tabs"><div class="seg-g" role="tablist">${tabs.map(t => `<button class="seg ${tab === t ? 'on' : ''}" role="tab" aria-selected="${tab === t}" data-act="tab" data-k="and" data-v="${t}">${t}</button>`).join('')}</div>
+    <div class="acts">${tab === 'Passos' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="pCsv">⬇ CSV</button>' : tab === 'Contratos' ? '<button class="btn sm" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost sm" data-act="csv" data-k="contratos">⬇ CSV</button>' : ''}</div></div>`;
   const body = tab === 'Passos' ? tabPassos(o) : tab === 'Materiais e custos' ? tabMat(o) : tab === 'Contratos' ? tabCont(o, cts) : tabCron(o);
-  return head + sel + hero + kp + tb + body;
+  return header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.') + strip + head + tb + body;
 };
 
 function tabPassos(o) {
-  const ps = (o.passos || []).map((p, i) => ({ p, i })).filter(x => !state.q || (x.p.nome + ' ' + (x.p.obs || '')).toLowerCase().includes(state.q.toLowerCase()));
-  const acts = `<div class="acts" style="margin-bottom:14px"><button class="btn" data-act="pNew">+ Novo passo</button>${!(o.passos || []).length ? '<button class="btn ghost" data-act="pTpl">✨ Usar modelo padrão de obra</button>' : ''}<button class="btn ghost" data-act="pCsv">⬇ Exportar CSV</button></div>`;
-  if (!ps.length) return acts + '<div class="card empty">Nenhum passo. Crie o primeiro passo ou use o modelo padrão.</div>';
-  const last = (o.passos || []).length - 1;
-  return acts + `<div class="plist">${ps.map(({ p, i }) => {
-    const late = passoLate(p), cs = p.status === 'Concluído' ? 'done' : late ? 'late' : p.status === 'Em andamento' ? 'doing' : '';
-    const chips = (p.mats || []).map(m => { const x = by(S.materiais, m.matId), falta = !p.baixado && x && x.qtd < m.qtd; return `<span class="mchip ${falta ? 'bad' : ''}" title="${falta ? 'Estoque insuficiente' : ''}">${esc(x ? x.nome : '?')} · ${num(m.qtd)} ${esc(x ? x.un : '')}${falta ? ' ⚠' : ''}</span>`; }).join('');
-    return `<div class="passo ${cs}"><button class="chk" data-act="pToggle" data-id="${p.id}" title="${p.status === 'Concluído' ? 'Desmarcar' : 'Marcar como concluído'}">${p.status === 'Concluído' ? '✓' : ''}</button>
-    <div class="pb"><div class="row" style="align-items:flex-start;flex-wrap:wrap"><div><small class="ord">${ordName(i)}</small><div class="pt">${esc(p.nome)}</div></div><div>${late ? `<span class="pill c-red">Atrasado ${-daysTo(p.fim)}d</span> ` : ''}${pill(p.status)}</div></div>
-    <div class="sm mut" style="margin:4px 0 8px">📅 ${dt(p.ini)} → ${dt(p.fim)} · peso ${p.peso || 1}${p.dataConc ? ' · concluído em ' + dt(p.dataConc) : ''}${p.obs ? ' · ' + esc(p.obs) : ''}</div>
-    ${chips ? `<div class="mchips">${chips}</div>` : ''}
-    <div class="sm" style="margin-top:8px">💰 Previsto <b>${brl(passoCost(p))}</b> <span class="mut">(materiais ${brl(matCost(p))} + mão de obra/serviços ${brl(p.extra)})</span></div></div>
-    <div class="pa">${(p.mats || []).length ? (p.baixado ? '<span class="pill c-green">Materiais baixados</span>' : `<button class="btn green sm" data-act="pBaixa" data-id="${p.id}">📤 Baixar materiais</button>`) : ''}
-    <button class="btn ghost sm" data-act="pEdit" data-id="${p.id}">✏️</button><button class="btn ghost sm" data-act="pUp" data-id="${p.id}" ${i === 0 ? 'disabled' : ''}>▲</button><button class="btn ghost sm" data-act="pDown" data-id="${p.id}" ${i === last ? 'disabled' : ''}>▼</button><button class="btn red sm" data-act="pDel" data-id="${p.id}">🗑</button></div></div>`;
-  }).join('')}</div>`;
+  const all = o.passos || [], ps = all.map((p, i) => ({ p, i })).filter(x => !state.q || (x.p.nome + ' ' + (x.p.obs || '')).toLowerCase().includes(state.q.toLowerCase()));
+  state.open = state.open || {};
+  const list = !all.length ? `<div class="card empty">Nenhum passo nesta obra.<br><br><button class="btn sm" data-act="pTpl">✨ Usar modelo padrão de obra</button></div>`
+    : !ps.length ? '<div class="card empty">Nenhum passo encontrado na busca.</div>'
+    : `<div class="card st-list">${ps.map(({ p, i }) => {
+      const late = passoLate(p), cs = p.status === 'Concluído' ? 'done' : late ? 'late' : p.status === 'Em andamento' ? 'doing' : '', op = state.open[p.id];
+      const mats = p.mats || [], falta = !p.baixado && mats.some(m => { const x = by(S.materiais, m.matId); return x && x.qtd < m.qtd; });
+      return `<div class="st-row ${cs} ${op ? 'open' : ''}">
+        <button class="st-dot" data-act="pToggle" data-id="${p.id}" title="${p.status === 'Concluído' ? 'Desmarcar passo' : 'Marcar passo como concluído'}" aria-label="${p.status === 'Concluído' ? 'Desmarcar' : 'Concluir'} ${esc(p.nome)}">${p.status === 'Concluído' ? '✓' : i + 1}</button>
+        <div class="st-body">
+          <div class="st-line" data-act="pOpen" data-id="${p.id}" role="button" tabindex="0" aria-expanded="${!!op}">
+            <div class="st-txt"><small class="ord">${ordName(i)}</small><b class="st-name">${esc(p.nome)}</b>
+              <span class="st-meta">${dt(p.ini).slice(0, 5)} → ${dt(p.fim)}${mats.length ? ` · ${mats.length} materia${mats.length > 1 ? 'is' : 'l'}` : ''}${falta ? ' <span class="down">⚠ falta estoque</span>' : ''}</span></div>
+            <span class="st-cost">${brlS(passoCost(p))}</span>
+            <span class="st-pill">${late ? `<span class="pill c-red">${-daysTo(p.fim)}d atraso</span>` : pill(p.status)}</span>
+            <span class="st-car" aria-hidden="true">${op ? '▴' : '▾'}</span>
+          </div>
+          ${op ? `<div class="st-det">
+            ${mats.length ? `<div class="mchips">${mats.map(m => { const x = by(S.materiais, m.matId), f = !p.baixado && x && x.qtd < m.qtd; return `<span class="mchip ${f ? 'bad' : ''}">${esc(x ? x.nome : '?')} · ${num(m.qtd)} ${esc(x ? x.un : '')}${f ? ' ⚠' : ''}</span>`; }).join('')}</div>` : '<p class="sm mut">Nenhum material vinculado.</p>'}
+            <p class="sm mut">Materiais ${brl(matCost(p))} + mão de obra/serviços ${brl(p.extra)} = <b style="color:var(--txt)">${brl(passoCost(p))}</b> · peso ${p.peso || 1}${p.dataConc ? ' · concluído em ' + dt(p.dataConc) : ''}${p.obs ? ' · ' + esc(p.obs) : ''}</p>
+            <div class="acts">${mats.length ? (p.baixado ? '<span class="pill c-green">✓ Materiais baixados</span>' : `<button class="btn green sm" data-act="pBaixa" data-id="${p.id}">📤 Baixar materiais</button>`) : ''}
+              <button class="btn ghost sm" data-act="pEdit" data-id="${p.id}">✏️ Editar</button><button class="btn ghost sm" data-act="pUp" data-id="${p.id}" ${i === 0 ? 'disabled' : ''} aria-label="Subir">▲</button><button class="btn ghost sm" data-act="pDown" data-id="${p.id}" ${i === all.length - 1 ? 'disabled' : ''} aria-label="Descer">▼</button><button class="btn red sm" data-act="pDel" data-id="${p.id}" aria-label="Excluir passo">🗑</button></div>
+          </div>` : ''}
+        </div></div>`;
+    }).join('')}</div>`;
+  return `<div class="an-grid">${list}${sidePanel(o)}</div>`;
+}
+
+function sidePanel(o) {
+  const ps = o.passos || [], p = prog(o), prox = ps.filter(x => x.status !== 'Concluído').sort((a, b) => a.fim.localeCompare(b.fim)).slice(0, 3);
+  const tot = ps.reduce((s, x) => s + passoCost(x), 0), real = ps.reduce((s, x) => s + passoReal(x), 0);
+  const need = {}; ps.filter(x => !x.baixado).forEach(x => (x.mats || []).forEach(m => need[m.matId] = (need[m.matId] || 0) + m.qtd));
+  const falt = Object.keys(need).filter(k => { const m = by(S.materiais, k); return m && m.qtd < need[k]; }).length;
+  return `<aside class="an-side">
+    <div class="card an-sum">${ring(p)}<div><b>${ps.filter(x => x.status === 'Concluído').length} de ${ps.length} passos</b><span class="sm mut">Clique no círculo de um passo para marcar como concluído.</span></div></div>
+    <div class="card"><h3>Próximos prazos</h3>${prox.length ? prox.map(x => { const d = daysTo(x.fim); return `<div class="an-next"><span>${esc(x.nome)}</span><b class="${d < 0 ? 'down' : d <= 7 ? 'warn' : ''}">${d < 0 ? -d + 'd atraso' : d === 0 ? 'hoje' : d + 'd'}</b></div>`; }).join('') : '<p class="sm mut">Todos os passos concluídos.</p>'}</div>
+    <div class="card"><h3>Custos dos passos</h3>
+      <div class="an-next"><span>Previsto</span><b>${brlS(tot)}</b></div><div class="an-next"><span>Realizado</span><b>${brlS(real)}</b></div><div class="an-next"><span>Orçamento</span><b>${brlS(o.orcamento)}</b></div>
+      <div style="margin-top:10px">${bar(pct(tot, o.orcamento), tot > o.orcamento ? 'r' : 'b')}</div>
+      <p class="sm ${falt ? 'down' : 'mut'}" style="margin-top:10px">${falt ? `⚠ ${falt} material(is) sem estoque suficiente` : '✓ Estoque cobre os materiais pendentes'}</p>
+      <button class="lnk" data-act="tab" data-k="and" data-v="Materiais e custos">Ver materiais e custos →</button></div>
+  </aside>`;
 }
 
 function tabMat(o) {
   const ps = o.passos || [], need = {};
   ps.forEach(p => (p.mats || []).forEach(m => { const r = need[m.matId] = need[m.matId] || { pend: 0, baix: 0 }; if (p.baixado) r.baix += m.qtd; else r.pend += m.qtd; }));
   const rows = Object.keys(need).map(k => ({ m: by(S.materiais, k), r: need[k] })).filter(x => x.m);
-  const matT = ps.reduce((s, p) => s + matCost(p), 0), exT = ps.reduce((s, p) => s + (+p.extra || 0), 0), tot = matT + exT, real = ps.reduce((s, p) => s + passoReal(p), 0);
-  const pc = pct(tot, o.orcamento);
-  return `<div class="grid g-2" style="margin-bottom:18px">
-  <div class="card"><h3>Custo previsto x orçamento <small>${pc}% do orçamento</small></h3>${bar(pc, tot > o.orcamento ? 'r' : 'b')}
-    <div class="meta"><div><small>Materiais</small><b>${brl(matT)}</b></div><div><small>Mão de obra e serviços</small><b>${brl(exT)}</b></div><div><small>Total previsto</small><b>${brl(tot)}</b></div><div><small>Orçamento da obra</small><b>${brl(o.orcamento)}</b></div><div><small>Realizado nos passos</small><b>${brl(real)}</b></div><div><small>${tot > o.orcamento ? 'Estouro previsto' : 'Folga no orçamento'}</small><b class="${tot > o.orcamento ? 'down' : 'up'}">${brl(Math.abs(o.orcamento - tot))}</b></div></div></div>
-  <div class="card"><h3>Custo por passo</h3><div class="list">${ps.map((p, i) => `<div class="li"><div><b>${ordName(i)} · ${esc(p.nome)}</b><small>materiais ${brl(matCost(p))} + serviços ${brl(p.extra)}</small></div><div class="end">${brl(passoCost(p))}</div></div>`).join('') || '<p class="mut">Sem passos.</p>'}</div></div></div>` +
-  `<h3 style="margin:0 0 12px">Materiais necessários nesta obra</h3>` + (rows.length ? `<div class="tw"><table><thead><tr><th>Material</th><th>A usar</th><th>Já baixado</th><th>Em estoque</th><th>Situação</th><th>Custo previsto</th><th>Fornecedor</th><th></th></tr></thead><tbody>${rows.map(({ m, r }) => { const falta = Math.max(0, r.pend - m.qtd); return `<tr><td><b>${esc(m.nome)}</b></td><td>${num(r.pend)} ${esc(m.un)}</td><td>${num(r.baix)} ${esc(m.un)}</td><td>${num(m.qtd)} ${esc(m.un)}</td><td>${falta ? `<span class="pill c-red">Falta ${num(falta)} ${esc(m.un)}</span>` : '<span class="pill c-green">Suficiente</span>'}</td><td>${brl((r.pend + r.baix) * m.custo)}</td><td>${esc(nm(S.fornecedores, m.forn))}</td><td><button class="btn green sm" data-act="mov" data-v="Entrada" data-id="${m.id}">📥 Entrada</button></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="card empty">Nenhum material vinculado aos passos. Edite um passo para adicionar materiais.</div>');
+  const matT = ps.reduce((s, p) => s + matCost(p), 0), exT = ps.reduce((s, p) => s + (+p.extra || 0), 0), tot = matT + exT, real = ps.reduce((s, p) => s + passoReal(p), 0), est = tot > o.orcamento;
+  return `<div class="an-stats an-stats-c card">${stat('Materiais', brlS(matT))}${stat('Mão de obra e serviços', brlS(exT))}${stat('Total previsto', brlS(tot), est ? 'down' : '', pct(tot, o.orcamento) + '% do orçamento')}${stat('Realizado', brlS(real))}${stat(est ? 'Estouro previsto' : 'Folga', brlS(Math.abs(o.orcamento - tot)), est ? 'down' : 'up')}</div>
+  <div class="an-grid">
+    <div>${rows.length ? `<div class="tw"><table class="tbl-c"><thead><tr><th>Material</th><th>A usar</th><th>Baixado</th><th>Estoque</th><th>Situação</th><th>Custo</th><th></th></tr></thead><tbody>${rows.map(({ m, r }) => { const falta = Math.max(0, r.pend - m.qtd); return `<tr><td><b>${esc(m.nome)}</b><br><small class="mut">${esc(nm(S.fornecedores, m.forn))}</small></td><td>${num(r.pend)} ${esc(m.un)}</td><td>${num(r.baix)}</td><td>${num(m.qtd)}</td><td>${falta ? `<span class="pill c-red">Falta ${num(falta)}</span>` : '<span class="pill c-green">OK</span>'}</td><td>${brlS((r.pend + r.baix) * m.custo)}</td><td><button class="btn green sm" data-act="mov" data-v="Entrada" data-id="${m.id}" aria-label="Entrada de ${esc(m.nome)}">📥</button></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="card empty">Nenhum material vinculado aos passos.</div>'}</div>
+    <aside class="card an-side"><h3>Custo por passo</h3>${ps.map((p, i) => `<div class="an-next"><span>${i + 1}. ${esc(p.nome)}</span><b>${brlS(passoCost(p))}</b></div>`).join('') || '<p class="sm mut">Sem passos.</p>'}</aside>
+  </div>`;
 }
 
 function tabCont(o, cts) {
   const rows = cts.filter(c => match(c)), v = cts.reduce((s, c) => s + c.valor, 0), pg = cts.reduce((s, c) => s + c.pago, 0);
-  return `<div class="acts" style="margin-bottom:14px"><button class="btn" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost" data-act="csv" data-k="contratos">⬇ Exportar CSV</button></div>
-  <div class="grid g-kpi">${kpi('📑', 'blue', cts.length, 'Contratos da obra')}${kpi('💼', 'gold', brlS(v), 'Total contratado')}${kpi('✅', 'green', brlS(pg), 'Já pago')}${kpi('⏳', 'orange', brlS(v - pg), 'A pagar')}</div>` +
-  table([
-    { h: 'Contrato', f: c => `<b>${esc(c.nome)}</b><br><small class="mut">${esc(c.empresa)} · ${esc(c.tipo)}</small>` },
-    { h: 'Vigência', f: c => `${dt(c.inicio)} → ${dt(c.fim)}${c.status === 'Vigente' && daysTo(c.fim) < 0 ? '<br><small class="down">Vencido</small>' : c.status === 'Vigente' && daysTo(c.fim) <= 30 ? '<br><small class="warn">Vence em ' + daysTo(c.fim) + ' dias</small>' : ''}` },
-    { h: 'Valor', f: c => `<b>${brl(c.valor)}</b>` },
-    { h: 'Pago', f: c => `${brl(c.pago)}<div style="width:110px;margin-top:5px">${bar(pct(c.pago, c.valor), 'g')}</div>` },
-    { h: 'Saldo', f: c => brl(c.valor - c.pago) }, { h: 'Status', f: c => pill(c.status) }
-  ], rows, 'contratos', c => c.valor - c.pago > 0 ? `<button class="btn green sm" data-act="cPay" data-id="${c.id}">💵 Pagar</button>` : '');
+  return `<div class="an-stats an-stats-c card">${stat('Contratos', cts.length)}${stat('Contratado', brlS(v))}${stat('Pago', brlS(pg), 'up')}${stat('A pagar', brlS(v - pg), v - pg > 0 ? 'warn' : '')}</div>` +
+  (rows.length ? `<div class="ct-list">${rows.map(c => { const pc = pct(c.pago, c.valor), d = daysTo(c.fim), venc = c.status === 'Vigente' && d < 0, perto = c.status === 'Vigente' && d >= 0 && d <= 30;
+    return `<div class="card ct">
+      <div class="ct-top"><div><b>${esc(c.nome)}</b><small class="mut">${esc(c.empresa)} · ${esc(c.tipo)}</small></div>${pill(c.status)}</div>
+      <div class="ct-mid"><span class="sm mut">${dt(c.inicio)} → ${dt(c.fim)}${venc ? ' <b class="down">· vencido</b>' : perto ? ` <b class="warn">· vence em ${d}d</b>` : ''}</span><span class="sm"><b>${brlS(c.pago)}</b> <span class="mut">de ${brlS(c.valor)}</span></span></div>
+      ${bar(pc, 'g')}
+      <div class="ct-bot"><span class="sm mut">${pc}% pago · saldo ${brl(c.valor - c.pago)}</span><div class="acts">${c.valor - c.pago > 0 ? `<button class="btn green sm" data-act="cPay" data-id="${c.id}">💵 Pagar</button>` : ''}<button class="btn ghost sm" data-act="edit" data-k="contratos" data-id="${c.id}" aria-label="Editar contrato">✏️</button><button class="btn red sm" data-act="del" data-k="contratos" data-id="${c.id}" aria-label="Excluir contrato">🗑</button></div></div>
+    </div>`; }).join('')}</div>` : '<div class="card empty">Nenhum contrato nesta obra.</div>');
 }
 
 function tabCron(o) {
@@ -490,6 +519,7 @@ const ACT = {
   move: (id, b) => { by(S.tarefas, id).status = b.dataset.v; save(); render(); toast('Tarefa movida para "' + b.dataset.v + '"'); },
   quick: () => quick(),
   selObra: id => { state.f.andObra = id; render(); },
+  pOpen: id => { state.open = state.open || {}; state.open[id] = !state.open[id]; render(); },
   pNew: () => openPasso(curObraId()), pEdit: id => openPasso(curObraId(), id),
   pToggle: id => togglePasso(by(S.obras, curObraId()), id), pBaixa: id => baixarPasso(by(S.obras, curObraId()), id),
   pUp: id => movePasso(by(S.obras, curObraId()), id, -1), pDown: id => movePasso(by(S.obras, curObraId()), id, 1),
@@ -499,6 +529,7 @@ const ACT = {
   csv: (id, b) => exportCSV(b.dataset.k)
 };
 $('#view').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && ACT[b.dataset.act]) { e.stopPropagation(); ACT[b.dataset.act](b.dataset.id, b); } });
+$('#view').addEventListener('keydown', e => { const b = e.target.closest('[role=button][data-act]'); if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); b.click(); } });
 $('#view').addEventListener('change', e => { const s = e.target.closest('[data-sel]'); if (s) { state.f[s.dataset.sel] = s.value; render(); } });
 
 function quick() {
