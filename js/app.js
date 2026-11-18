@@ -18,14 +18,20 @@ const nm = (arr, id) => { const r = by(arr, id); return r ? r.nome : '—'; };
 const daysTo = s => Math.round((new Date(s + 'T12:00:00') - new Date()) / 864e5);
 const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const prog = o => o.status === 'Concluída' ? 100 : (o.etapas && o.etapas.length ? Math.round(o.etapas.reduce((s, e) => s + e.pct, 0) / o.etapas.length) : 0);
+const prog = o => { if (o.status === 'Concluída') return 100; const ps = o.passos || [], t = ps.reduce((s, x) => s + (+x.peso || 1), 0); return t ? Math.round(ps.filter(x => x.status === 'Concluído').reduce((s, x) => s + (+x.peso || 1), 0) / t * 100) : 0; };
 const isLate = o => o.status === 'Em andamento' && daysTo(o.previsao) < 0;
 const low = m => m.qtd < m.min;
 const initials = n => n.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
-const COLOR = { 'Em andamento': 'blue', 'Planejamento': 'purple', 'Pausada': 'orange', 'Concluída': 'green', 'Lançamento': 'purple', 'Em obras': 'blue', 'Entregue': 'green', 'Ativo': 'green', 'Férias': 'orange', 'Afastado': 'red', 'Alta': 'red', 'Média': 'orange', 'Baixa': 'blue', 'Aberta': 'orange', 'Resolvida': 'green', 'Receita': 'green', 'Despesa': 'red', 'Entrada': 'green', 'Saída': 'orange' };
+const COLOR = { 'Concluído': 'green', 'Pendente': 'gray', 'Vigente': 'blue', 'Rascunho': 'gray', 'Rescindido': 'red', 'Em andamento': 'blue', 'Planejamento': 'purple', 'Pausada': 'orange', 'Concluída': 'green', 'Lançamento': 'purple', 'Em obras': 'blue', 'Entregue': 'green', 'Ativo': 'green', 'Férias': 'orange', 'Afastado': 'red', 'Alta': 'red', 'Média': 'orange', 'Baixa': 'blue', 'Aberta': 'orange', 'Resolvida': 'green', 'Receita': 'green', 'Despesa': 'red', 'Entrada': 'green', 'Saída': 'orange' };
 const pill = t => `<span class="pill c-${COLOR[t] || 'blue'}">${esc(t)}</span>`;
 const state = { q: '', f: {}, tab: {} };
 const fil = (k, d = 'Todos') => state.f[k] || d;
+// migração: dados antigos (etapas) -> passos; contratos
+(function migrate() {
+  if (!S.contratos) S.contratos = seedData().contratos.filter(c => by(S.obras, c.obraId));
+  S.obras.forEach(o => { if (!o.passos) { const old = o.etapas && o.etapas.length ? Math.round(o.etapas.reduce((s, e) => s + e.pct, 0) / o.etapas.length) : 0; o.passos = mkPassos(o, Math.floor(old / 100 * 9), o.status === 'Em andamento'); delete o.etapas; } });
+  save();
+})();
 
 /* ============ esquema dos cadastros ============ */
 const opt = arr => arr.map(v => ({ v, l: v }));
@@ -58,17 +64,24 @@ const SCHEMA = {
     { k: 'titulo', l: 'Título', full: 1, req: 1 }, { k: 'obraId', l: 'Obra', type: 'select', o: refOpt('obras', 1) },
     { k: 'prio', l: 'Prioridade', type: 'select', o: () => opt(['Alta', 'Média', 'Baixa']) },
     { k: 'status', l: 'Status', type: 'select', o: () => opt(['Aberta', 'Em andamento', 'Resolvida']) }, { k: 'prazo', l: 'Prazo', type: 'date' }] },
+  contratos: { t: 'Contrato', f: [
+    { k: 'nome', l: 'Objeto do contrato', full: 1, req: 1 }, { k: 'empresa', l: 'Contratada (empresa / pessoa)' }, { k: 'obraId', l: 'Obra', type: 'select', o: refOpt('obras') },
+    { k: 'tipo', l: 'Tipo', type: 'select', o: () => opt(['Empreitada', 'Fornecimento', 'Serviço', 'Projeto', 'Locação', 'Outro']) },
+    { k: 'status', l: 'Status', type: 'select', o: () => opt(['Rascunho', 'Vigente', 'Concluído', 'Rescindido']) },
+    { k: 'valor', l: 'Valor do contrato (R$)', type: 'number' }, { k: 'pago', l: 'Já pago (R$)', type: 'number' },
+    { k: 'inicio', l: 'Início', type: 'date' }, { k: 'fim', l: 'Término', type: 'date' }, { k: 'obs', l: 'Observações', full: 1 }] },
   lancamentos: { t: 'Lançamento', f: [
     { k: 'desc', l: 'Descrição', full: 1, req: 1 }, { k: 'tipo', l: 'Tipo', type: 'select', o: () => opt(['Receita', 'Despesa']) },
     { k: 'valor', l: 'Valor (R$)', type: 'number' }, { k: 'data', l: 'Data', type: 'date' }, { k: 'obraId', l: 'Obra', type: 'select', o: refOpt('obras', 1) }] }
 };
 const DEFAULTS = {
-  obras: () => ({ status: 'Planejamento', orcamento: 0, gasto: 0, inicio: todayISO(), previsao: todayISO(), empId: (S.empreendimentos[0] || {}).id || '', etapas: ['Fundação', 'Estrutura', 'Alvenaria', 'Instalações', 'Acabamento'].map(n => ({ nome: n, pct: 0 })) }),
+  obras: () => ({ status: 'Planejamento', orcamento: 0, gasto: 0, inicio: todayISO(), previsao: todayISO(), empId: (S.empreendimentos[0] || {}).id || '' }),
   empreendimentos: () => ({ tipo: 'Condomínio de apartamentos', status: 'Lançamento', unidades: 0, vendidas: 0, reservadas: 0, vgv: 0, entrega: todayISO() }),
   materiais: () => ({ cat: 'Outros', un: 'un', qtd: 0, min: 0, custo: 0, forn: '' }),
   funcionarios: () => ({ status: 'Ativo', obraId: '', salario: 0, adm: todayISO() }),
   fornecedores: () => ({ prazo: 3 }),
   tarefas: () => ({ prio: 'Média', status: 'Aberta', obraId: '', prazo: todayISO() }),
+  contratos: () => ({ obraId: curObraId(), tipo: 'Empreitada', status: 'Vigente', valor: 0, pago: 0, inicio: todayISO(), fim: todayISO() }),
   lancamentos: () => ({ tipo: 'Despesa', valor: 0, data: todayISO(), obraId: '' })
 };
 
@@ -107,14 +120,14 @@ function openForm(key, id) {
   const ok = () => {
     const fm = $('#frm'); if (!fm.reportValidity()) return;
     const d = {}; sc.f.forEach(f => { const el = fm.elements[f.k]; d[f.k] = f.type === 'number' ? (parseFloat(el.value) || 0) : el.value.trim(); });
-    if (id) Object.assign(row, d); else { Object.assign(row, d, { id: uid(key[0]) }); S[key].push(row); }
+    if (id) Object.assign(row, d); else { Object.assign(row, d, { id: uid(key[0]) }); if (key === 'obras') row.passos = mkPassos(row, 0, false); S[key].push(row); }
     save(); closeModal(); render(); toast(id ? 'Alterações salvas' : sc.t + ' cadastrado(a)');
   };
   $('#frmOk').onclick = ok; $('#frm').onsubmit = e => { e.preventDefault(); ok(); };
 }
 function del(key, id) {
   const r = by(S[key], id); if (!r) return;
-  confirmBox(`Excluir <b>${esc(r.nome || r.titulo || r.desc)}</b>? Essa ação não pode ser desfeita.`, () => { S[key] = S[key].filter(x => x.id !== id); save(); render(); toast('Excluído'); });
+  confirmBox(`Excluir <b>${esc(r.nome || r.titulo || r.desc)}</b>? Essa ação não pode ser desfeita.`, () => { S[key] = S[key].filter(x => x.id !== id); if (key === 'obras') S.contratos = S.contratos.filter(c => c.obraId !== id); save(); render(); toast('Excluído'); });
 }
 
 /* ============ movimentação de estoque ============ */
@@ -183,6 +196,8 @@ function alerts() {
   S.obras.filter(isLate).forEach(o => a.push({ c: 'orange', ic: '⏰', t: 'Obra atrasada: ' + o.nome, s: `Previsão era ${dt(o.previsao)} (${-daysTo(o.previsao)} dias de atraso)`, h: '#/obras' }));
   S.obras.filter(o => o.status !== 'Concluída' && o.orcamento && pct(o.gasto, o.orcamento) > prog(o) + 20).forEach(o => a.push({ c: 'red', ic: '💸', t: 'Gasto acima do ritmo: ' + o.nome, s: `${pct(o.gasto, o.orcamento)}% do orçamento gasto para ${prog(o)}% de avanço`, h: '#/obras' }));
   S.tarefas.filter(t => t.status !== 'Resolvida' && t.prio === 'Alta' && daysTo(t.prazo) <= 7).forEach(t => a.push({ c: 'purple', ic: '✅', t: 'Tarefa urgente: ' + t.titulo, s: 'Prazo ' + dt(t.prazo), h: '#/tarefas' }));
+  S.obras.filter(o => o.status === 'Em andamento').forEach(o => { const l = (o.passos || []).filter(passoLate); if (l.length) a.push({ c: 'orange', ic: '🪜', t: `${l.length} passo(s) atrasado(s): ${o.nome}`, s: l.map(x => x.nome).slice(0, 2).join(', '), h: '#/andamento' }); });
+  S.contratos.filter(c => c.status === 'Vigente' && daysTo(c.fim) <= 30).forEach(c => a.push({ c: 'purple', ic: '📑', t: (daysTo(c.fim) < 0 ? 'Contrato vencido: ' : 'Contrato vence em ' + daysTo(c.fim) + ' dias: ') + c.nome, s: nm(S.obras, c.obraId) + ' · saldo ' + brl(c.valor - c.pago), h: '#/andamento' }));
   return a;
 }
 const alertList = (arr, empty) => arr.length ? `<div class="list">${arr.map(x => `<a class="li" href="${x.h}" style="text-decoration:none;color:inherit" data-close><span class="dot c-${x.c}">${x.ic}</span><div><b>${esc(x.t)}</b><small>${esc(x.s)}</small></div></a>`).join('')}</div>` : `<p class="empty">${empty}</p>`;
@@ -264,15 +279,14 @@ function openObra(id) {
   modal(esc(o.nome), `
   <div class="grid g-kpi" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${kpi('📈', 'blue', prog(o) + '%', 'Avanço físico')}${kpi('💰', 'gold', brlS(o.gasto), 'de ' + brlS(o.orcamento))}${kpi('📅', isLate(o) ? 'red' : 'green', dt(o.previsao), 'Previsão', isLate(o) ? '<span class="down">Atrasada</span>' : '')}</div>
   <p class="mut sm" style="margin-bottom:18px">${pill(o.status)} &nbsp; ${esc(nm(S.empreendimentos, o.empId))} · ${esc(o.endereco || 'Sem endereço')} · Resp.: ${esc(o.resp || '—')}</p>
-  <div class="card" style="margin-bottom:16px;box-shadow:none"><h3>Etapas da obra <small>arraste para atualizar</small></h3>${(o.etapas || []).map((e, i) => `<div class="etapa"><span>${esc(e.nome)}</span><input type="range" min="0" max="100" step="5" value="${e.pct}" data-et="${i}"><b id="ev${i}">${e.pct}%</b></div>`).join('')}</div>
+  <div class="card" style="margin-bottom:16px;box-shadow:none"><h3>Passos da obra <small>${prog(o)}% concluído</small></h3>${(o.passos || []).map((p, i) => `<div class="row sm" style="padding:5px 0"><span>${p.status === 'Concluído' ? '✅' : '⬜'} ${esc(p.nome)}</span><span class="mut">até ${dt(p.fim)}</span></div>`).join('') || '<p class="mut sm">Sem passos.</p>'}</div>
   <div class="grid g-2" style="grid-template-columns:1fr 1fr">
     <div><h3 style="font-size:.95rem;margin-bottom:8px">👷 Equipe alocada (${eq.length})</h3><div class="list">${eq.map(f => `<div class="li"><span class="avatar" style="margin:0">${initials(f.nome)}</span><div><b>${esc(f.nome)}</b><small>${esc(f.cargo)}</small></div></div>`).join('') || '<p class="mut sm">Ninguém alocado.</p>'}</div></div>
     <div><h3 style="font-size:.95rem;margin-bottom:8px">📤 Materiais consumidos</h3><div class="list">${consumo.slice(0, 6).map(v => { const m = by(S.materiais, v.matId); return `<div class="li"><div><b>${esc(m ? m.nome : '—')}</b><small>${dt(v.data)}</small></div><div class="end">${num(v.qtd)} ${esc(m ? m.un : '')}</div></div>`; }).join('') || '<p class="mut sm">Sem consumo registrado.</p>'}</div>
     <h3 style="font-size:.95rem;margin:14px 0 8px">✅ Tarefas abertas (${tf.length})</h3>${tf.map(t => `<div class="sm" style="padding:4px 0">• ${esc(t.titulo)} ${pill(t.prio)}</div>`).join('') || '<p class="mut sm">Nenhuma.</p>'}</div>
   </div>`,
-  `<button class="btn red" id="oDel">Excluir</button><button class="btn ghost" id="oEdit">✏️ Editar dados</button><button class="btn" id="oSave">Salvar etapas</button>`, true);
-  document.querySelectorAll('[data-et]').forEach(r => r.oninput = () => $('#ev' + r.dataset.et).textContent = r.value + '%');
-  $('#oSave').onclick = () => { document.querySelectorAll('[data-et]').forEach(r => o.etapas[+r.dataset.et].pct = +r.value); if (prog(o) === 100 && o.status === 'Em andamento') o.status = 'Concluída'; save(); closeModal(); render(); toast('Etapas atualizadas'); };
+  `<button class="btn red" id="oDel">Excluir</button><button class="btn ghost" id="oEdit">✏️ Editar dados</button><button class="btn" id="oAnd">📈 Abrir andamento</button>`, true);
+  $('#oAnd').onclick = () => { state.f.andObra = id; closeModal(); location.hash = '#/andamento'; };
   $('#oEdit').onclick = () => openForm('obras', id); $('#oDel').onclick = () => del('obras', id);
 }
 
@@ -344,8 +358,165 @@ PAGES.tarefas = () => {
     <div class="acts">${ci > 0 ? `<button class="btn ghost sm" data-act="move" data-id="${t.id}" data-v="${cols[ci - 1]}">◀</button>` : ''}${ci < 2 ? `<button class="btn green sm" data-act="move" data-id="${t.id}" data-v="${cols[ci + 1]}">${ci === 1 ? '✔ Concluir' : 'Iniciar ▶'}</button>` : ''}<button class="btn ghost sm" data-act="edit" data-k="tarefas" data-id="${t.id}">✏️</button><button class="btn red sm" data-act="del" data-k="tarefas" data-id="${t.id}">🗑</button></div></div>`).join('') || '<p class="empty">Vazio</p>'}</div>`).join('')}</div>`;
 };
 
+/* ============ ANDAMENTO DAS OBRAS (passos, materiais, custos, contratos) ============ */
+const ORD = ['Primeiro', 'Segundo', 'Terceiro', 'Quarto', 'Quinto', 'Sexto', 'Sétimo', 'Oitavo', 'Nono', 'Décimo'];
+const ordName = i => i < 10 ? ORD[i] + ' passo' : (i + 1) + 'º passo';
+const passoLate = p => p.status !== 'Concluído' && daysTo(p.fim) < 0;
+const matCost = p => (p.mats || []).reduce((s, m) => { const x = by(S.materiais, m.matId); return s + (x ? x.custo * m.qtd : 0); }, 0);
+const passoCost = p => matCost(p) + (+p.extra || 0);
+const passoReal = p => (p.baixado ? matCost(p) : 0) + (p.status === 'Concluído' ? (+p.extra || 0) : 0);
+const toT = s => new Date(s + 'T12:00:00').getTime();
+const curObraId = () => { if (state.f.andObra && by(S.obras, state.f.andObra)) return state.f.andObra; const o = S.obras.find(x => x.status !== 'Concluída') || S.obras[0]; return o ? o.id : null; };
+function syncObra(o) {
+  const p = prog(o), ps = o.passos || [];
+  if (p === 100 && ps.length && o.status !== 'Concluída') o.status = 'Concluída';
+  else if (p < 100 && o.status === 'Concluída') o.status = 'Em andamento';
+  else if (o.status === 'Planejamento' && ps.some(x => x.status !== 'Pendente')) o.status = 'Em andamento';
+}
+
+PAGES.andamento = () => {
+  const id = curObraId(), head = header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.', '');
+  if (!id) return head + '<div class="card empty">Cadastre uma obra primeiro.</div>';
+  const o = by(S.obras, id), tab = state.tab.and || 'Passos', ps = o.passos || [], p = prog(o);
+  const done = ps.filter(x => x.status === 'Concluído').length, late = ps.filter(passoLate).length;
+  const prevT = ps.reduce((s, x) => s + passoCost(x), 0), cts = S.contratos.filter(c => c.obraId === id);
+  const cVal = cts.reduce((s, c) => s + c.valor, 0), cPago = cts.reduce((s, c) => s + c.pago, 0), dias = daysTo(o.previsao);
+  const sel = `<div class="osel">${S.obras.map(x => `<button class="${x.id === id ? 'on' : ''}" data-act="selObra" data-id="${x.id}"><div class="row"><b>${esc(x.nome)}</b><span>${prog(x)}%</span></div>${bar(prog(x), x.status === 'Concluída' ? 'g' : '')}</button>`).join('')}</div>`;
+  const hero = `<div class="card" style="margin-bottom:18px"><div class="row" style="align-items:flex-start;flex-wrap:wrap"><div><h2 style="font-size:1.35rem">${esc(o.nome)}</h2><p class="mut sm">${esc(nm(S.empreendimentos, o.empId))} · Resp.: ${esc(o.resp || '—')} · ${dt(o.inicio)} → ${dt(o.previsao)}</p></div>${pill(o.status)}</div>
+    <div class="bigbar ${p === 100 ? 'ok' : ''}"><i style="width:${p}%"></i><span>${p}% concluído</span></div>
+    <div class="row sm mut" style="margin-top:8px"><span>${done} de ${ps.length} passos concluídos</span><span>${dias >= 0 ? 'Faltam ' + dias + ' dias para o prazo final' : '<b class="down">' + (-dias) + ' dias além do prazo</b>'}</span></div></div>`;
+  const kp = `<div class="grid g-kpi">${kpi('✅', 'green', done + '/' + ps.length, 'Passos concluídos')}${kpi('⏰', late ? 'red' : 'blue', late, 'Passos atrasados')}${kpi('💰', prevT > o.orcamento ? 'red' : 'gold', brlS(prevT), 'Custo previsto nos passos', `<span class="mut">Orçamento da obra: ${brlS(o.orcamento)}</span>`)}${kpi('📑', 'purple', cts.length, 'Contratos', `<span class="mut">${brlS(cVal)} · pago ${brlS(cPago)}</span>`)}</div>`;
+  const tabs = ['Passos', 'Materiais e custos', 'Contratos', 'Cronograma'], ic = { 'Passos': '🪜', 'Materiais e custos': '📦', 'Contratos': '📑', 'Cronograma': '📅' };
+  const tb = `<div class="chips">${tabs.map(t => `<button class="chip ${tab === t ? 'on' : ''}" data-act="tab" data-k="and" data-v="${t}">${ic[t]} ${t}</button>`).join('')}</div>`;
+  const body = tab === 'Passos' ? tabPassos(o) : tab === 'Materiais e custos' ? tabMat(o) : tab === 'Contratos' ? tabCont(o, cts) : tabCron(o);
+  return head + sel + hero + kp + tb + body;
+};
+
+function tabPassos(o) {
+  const ps = (o.passos || []).map((p, i) => ({ p, i })).filter(x => !state.q || (x.p.nome + ' ' + (x.p.obs || '')).toLowerCase().includes(state.q.toLowerCase()));
+  const acts = `<div class="acts" style="margin-bottom:14px"><button class="btn" data-act="pNew">+ Novo passo</button>${!(o.passos || []).length ? '<button class="btn ghost" data-act="pTpl">✨ Usar modelo padrão de obra</button>' : ''}<button class="btn ghost" data-act="pCsv">⬇ Exportar CSV</button></div>`;
+  if (!ps.length) return acts + '<div class="card empty">Nenhum passo. Crie o primeiro passo ou use o modelo padrão.</div>';
+  const last = (o.passos || []).length - 1;
+  return acts + `<div class="plist">${ps.map(({ p, i }) => {
+    const late = passoLate(p), cs = p.status === 'Concluído' ? 'done' : late ? 'late' : p.status === 'Em andamento' ? 'doing' : '';
+    const chips = (p.mats || []).map(m => { const x = by(S.materiais, m.matId), falta = !p.baixado && x && x.qtd < m.qtd; return `<span class="mchip ${falta ? 'bad' : ''}" title="${falta ? 'Estoque insuficiente' : ''}">${esc(x ? x.nome : '?')} · ${num(m.qtd)} ${esc(x ? x.un : '')}${falta ? ' ⚠' : ''}</span>`; }).join('');
+    return `<div class="passo ${cs}"><button class="chk" data-act="pToggle" data-id="${p.id}" title="${p.status === 'Concluído' ? 'Desmarcar' : 'Marcar como concluído'}">${p.status === 'Concluído' ? '✓' : ''}</button>
+    <div class="pb"><div class="row" style="align-items:flex-start;flex-wrap:wrap"><div><small class="ord">${ordName(i)}</small><div class="pt">${esc(p.nome)}</div></div><div>${late ? `<span class="pill c-red">Atrasado ${-daysTo(p.fim)}d</span> ` : ''}${pill(p.status)}</div></div>
+    <div class="sm mut" style="margin:4px 0 8px">📅 ${dt(p.ini)} → ${dt(p.fim)} · peso ${p.peso || 1}${p.dataConc ? ' · concluído em ' + dt(p.dataConc) : ''}${p.obs ? ' · ' + esc(p.obs) : ''}</div>
+    ${chips ? `<div class="mchips">${chips}</div>` : ''}
+    <div class="sm" style="margin-top:8px">💰 Previsto <b>${brl(passoCost(p))}</b> <span class="mut">(materiais ${brl(matCost(p))} + mão de obra/serviços ${brl(p.extra)})</span></div></div>
+    <div class="pa">${(p.mats || []).length ? (p.baixado ? '<span class="pill c-green">Materiais baixados</span>' : `<button class="btn green sm" data-act="pBaixa" data-id="${p.id}">📤 Baixar materiais</button>`) : ''}
+    <button class="btn ghost sm" data-act="pEdit" data-id="${p.id}">✏️</button><button class="btn ghost sm" data-act="pUp" data-id="${p.id}" ${i === 0 ? 'disabled' : ''}>▲</button><button class="btn ghost sm" data-act="pDown" data-id="${p.id}" ${i === last ? 'disabled' : ''}>▼</button><button class="btn red sm" data-act="pDel" data-id="${p.id}">🗑</button></div></div>`;
+  }).join('')}</div>`;
+}
+
+function tabMat(o) {
+  const ps = o.passos || [], need = {};
+  ps.forEach(p => (p.mats || []).forEach(m => { const r = need[m.matId] = need[m.matId] || { pend: 0, baix: 0 }; if (p.baixado) r.baix += m.qtd; else r.pend += m.qtd; }));
+  const rows = Object.keys(need).map(k => ({ m: by(S.materiais, k), r: need[k] })).filter(x => x.m);
+  const matT = ps.reduce((s, p) => s + matCost(p), 0), exT = ps.reduce((s, p) => s + (+p.extra || 0), 0), tot = matT + exT, real = ps.reduce((s, p) => s + passoReal(p), 0);
+  const pc = pct(tot, o.orcamento);
+  return `<div class="grid g-2" style="margin-bottom:18px">
+  <div class="card"><h3>Custo previsto x orçamento <small>${pc}% do orçamento</small></h3>${bar(pc, tot > o.orcamento ? 'r' : 'b')}
+    <div class="meta"><div><small>Materiais</small><b>${brl(matT)}</b></div><div><small>Mão de obra e serviços</small><b>${brl(exT)}</b></div><div><small>Total previsto</small><b>${brl(tot)}</b></div><div><small>Orçamento da obra</small><b>${brl(o.orcamento)}</b></div><div><small>Realizado nos passos</small><b>${brl(real)}</b></div><div><small>${tot > o.orcamento ? 'Estouro previsto' : 'Folga no orçamento'}</small><b class="${tot > o.orcamento ? 'down' : 'up'}">${brl(Math.abs(o.orcamento - tot))}</b></div></div></div>
+  <div class="card"><h3>Custo por passo</h3><div class="list">${ps.map((p, i) => `<div class="li"><div><b>${ordName(i)} · ${esc(p.nome)}</b><small>materiais ${brl(matCost(p))} + serviços ${brl(p.extra)}</small></div><div class="end">${brl(passoCost(p))}</div></div>`).join('') || '<p class="mut">Sem passos.</p>'}</div></div></div>` +
+  `<h3 style="margin:0 0 12px">Materiais necessários nesta obra</h3>` + (rows.length ? `<div class="tw"><table><thead><tr><th>Material</th><th>A usar</th><th>Já baixado</th><th>Em estoque</th><th>Situação</th><th>Custo previsto</th><th>Fornecedor</th><th></th></tr></thead><tbody>${rows.map(({ m, r }) => { const falta = Math.max(0, r.pend - m.qtd); return `<tr><td><b>${esc(m.nome)}</b></td><td>${num(r.pend)} ${esc(m.un)}</td><td>${num(r.baix)} ${esc(m.un)}</td><td>${num(m.qtd)} ${esc(m.un)}</td><td>${falta ? `<span class="pill c-red">Falta ${num(falta)} ${esc(m.un)}</span>` : '<span class="pill c-green">Suficiente</span>'}</td><td>${brl((r.pend + r.baix) * m.custo)}</td><td>${esc(nm(S.fornecedores, m.forn))}</td><td><button class="btn green sm" data-act="mov" data-v="Entrada" data-id="${m.id}">📥 Entrada</button></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="card empty">Nenhum material vinculado aos passos. Edite um passo para adicionar materiais.</div>');
+}
+
+function tabCont(o, cts) {
+  const rows = cts.filter(c => match(c)), v = cts.reduce((s, c) => s + c.valor, 0), pg = cts.reduce((s, c) => s + c.pago, 0);
+  return `<div class="acts" style="margin-bottom:14px"><button class="btn" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost" data-act="csv" data-k="contratos">⬇ Exportar CSV</button></div>
+  <div class="grid g-kpi">${kpi('📑', 'blue', cts.length, 'Contratos da obra')}${kpi('💼', 'gold', brlS(v), 'Total contratado')}${kpi('✅', 'green', brlS(pg), 'Já pago')}${kpi('⏳', 'orange', brlS(v - pg), 'A pagar')}</div>` +
+  table([
+    { h: 'Contrato', f: c => `<b>${esc(c.nome)}</b><br><small class="mut">${esc(c.empresa)} · ${esc(c.tipo)}</small>` },
+    { h: 'Vigência', f: c => `${dt(c.inicio)} → ${dt(c.fim)}${c.status === 'Vigente' && daysTo(c.fim) < 0 ? '<br><small class="down">Vencido</small>' : c.status === 'Vigente' && daysTo(c.fim) <= 30 ? '<br><small class="warn">Vence em ' + daysTo(c.fim) + ' dias</small>' : ''}` },
+    { h: 'Valor', f: c => `<b>${brl(c.valor)}</b>` },
+    { h: 'Pago', f: c => `${brl(c.pago)}<div style="width:110px;margin-top:5px">${bar(pct(c.pago, c.valor), 'g')}</div>` },
+    { h: 'Saldo', f: c => brl(c.valor - c.pago) }, { h: 'Status', f: c => pill(c.status) }
+  ], rows, 'contratos', c => c.valor - c.pago > 0 ? `<button class="btn green sm" data-act="cPay" data-id="${c.id}">💵 Pagar</button>` : '');
+}
+
+function tabCron(o) {
+  const ps = o.passos || [];
+  if (!ps.length) return '<div class="card empty">Sem passos para exibir.</div>';
+  const t0 = Math.min(toT(o.inicio), ...ps.map(p => toT(p.ini))), t1 = Math.max(toT(o.previsao), ...ps.map(p => toT(p.fim))), span = Math.max(1, t1 - t0);
+  const pos = t => Math.min(100, Math.max(0, (t - t0) / span * 100)), hoje = pos(Date.now());
+  return `<div class="card gantt"><h3>Cronograma <small>${dt(o.inicio)} → ${dt(o.previsao)} · linha vermelha = hoje</small></h3>
+  ${ps.map((p, i) => { const l = pos(toT(p.ini)), w = Math.max(1.5, pos(toT(p.fim)) - l), c = p.status === 'Concluído' ? 'g' : passoLate(p) ? 'r' : p.status === 'Em andamento' ? 'b' : 'n';
+    return `<div class="grow"><span class="gl" title="${esc(p.nome)}">${i + 1}. ${esc(p.nome)}</span><div class="gt"><i class="gbar ${c}" style="left:${l}%;width:${w}%" title="${dt(p.ini)} → ${dt(p.fim)}">${w > 12 ? dt(p.ini).slice(0, 5) + ' → ' + dt(p.fim).slice(0, 5) : ''}</i><u class="today" style="left:${hoje}%"></u></div></div>`; }).join('')}
+  <div class="legend" style="margin-top:14px"><span><i style="background:var(--green)"></i>Concluído</span><span><i style="background:var(--blue)"></i>Em andamento</span><span><i style="background:var(--mut)"></i>Pendente</span><span><i style="background:var(--red)"></i>Atrasado</span></div></div>`;
+}
+
+function openPasso(oid, pid) {
+  const o = by(S.obras, oid), cur = pid ? o.passos.find(x => x.id === pid) : null;
+  const addD = (d, n) => { const t = new Date(d + 'T12:00:00'); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
+  const lastP = o.passos[o.passos.length - 1], ini0 = lastP ? addD(lastP.fim, 1) : o.inicio;
+  const p = cur || { nome: '', status: 'Pendente', ini: ini0, fim: addD(ini0, 30), peso: 1, extra: 0, mats: [], obs: '' };
+  const mrow = m => `<div class="mrow"><select name="mat">${S.materiais.map(x => `<option value="${x.id}" ${x.id === m.matId ? 'selected' : ''}>${esc(x.nome)} (${esc(x.un)} · ${brl(x.custo)})</option>`).join('')}</select><input name="q" type="number" min="0" step="any" value="${m.qtd}" aria-label="Quantidade"><button type="button" class="btn red sm" data-rm>✕</button></div>`;
+  modal(cur ? 'Editar passo' : 'Novo passo', `<form class="form" id="frm">
+    <label class="full">Nome do passo<input name="nome" required value="${esc(p.nome)}" placeholder="Ex.: Fundação"></label>
+    <label>Situação<select name="status">${['Pendente', 'Em andamento', 'Concluído'].map(s => `<option ${s === p.status ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
+    <label>Peso na barra (importância)<input name="peso" type="number" min="1" step="1" value="${p.peso || 1}"></label>
+    <label>Início previsto<input name="ini" type="date" required value="${p.ini}"></label><label>Prazo (término)<input name="fim" type="date" required value="${p.fim}"></label>
+    <label class="full">Mão de obra e serviços previstos (R$)<input name="extra" type="number" min="0" step="any" value="${p.extra || 0}"></label>
+    <div class="full"><b class="sm">Materiais necessários neste passo</b><div id="pm" style="margin-top:8px">${(p.mats || []).map(mrow).join('')}</div><button type="button" class="btn ghost sm" id="pmAdd" style="margin-top:6px">+ Adicionar material</button><p class="sm mut" id="pTot" style="margin-top:8px"></p></div>
+    <label class="full">Observações<input name="obs" value="${esc(p.obs || '')}"></label></form>`,
+    `<button class="btn ghost" data-close>Cancelar</button><button class="btn" id="frmOk">Salvar passo</button>`);
+  const fm = $('#frm');
+  const rows = () => [...document.querySelectorAll('#pm .mrow')].map(r => ({ matId: r.querySelector('select').value, qtd: parseFloat(r.querySelector('input').value) || 0 })).filter(m => m.qtd > 0);
+  const recalc = () => { const mc = rows().reduce((s, m) => s + (by(S.materiais, m.matId) || { custo: 0 }).custo * m.qtd, 0), ex = parseFloat(fm.elements.extra.value) || 0; $('#pTot').innerHTML = `Custo previsto: materiais <b>${brl(mc)}</b> + serviços <b>${brl(ex)}</b> = <b style="color:var(--gold2)">${brl(mc + ex)}</b>`; };
+  $('#pmAdd').onclick = () => { $('#pm').insertAdjacentHTML('beforeend', mrow({ matId: (S.materiais[0] || {}).id, qtd: 1 })); recalc(); };
+  $('#pm').addEventListener('click', e => { if (e.target.closest('[data-rm]')) { e.target.closest('.mrow').remove(); recalc(); } });
+  fm.addEventListener('input', recalc); fm.addEventListener('change', recalc); recalc();
+  $('#frmOk').onclick = () => {
+    if (!fm.reportValidity()) return;
+    if (fm.elements.fim.value < fm.elements.ini.value) return toast('O prazo não pode ser antes do início');
+    const d = { nome: fm.elements.nome.value.trim(), status: fm.elements.status.value, peso: Math.max(1, parseInt(fm.elements.peso.value) || 1), ini: fm.elements.ini.value, fim: fm.elements.fim.value, extra: parseFloat(fm.elements.extra.value) || 0, obs: fm.elements.obs.value.trim(), mats: rows() };
+    const was = cur ? cur.status : 'Pendente';
+    d.dataConc = d.status === 'Concluído' ? (was === 'Concluído' && cur.dataConc ? cur.dataConc : todayISO()) : '';
+    if (cur) Object.assign(cur, d); else o.passos.push(Object.assign({ id: uid('s'), baixado: false }, d));
+    syncObra(o); save(); closeModal(); render(); toast('Passo salvo · obra em ' + prog(o) + '%');
+  };
+}
+function togglePasso(o, pid) {
+  const p = o.passos.find(x => x.id === pid); if (!p) return;
+  if (p.status === 'Concluído') { p.status = 'Pendente'; p.dataConc = ''; } else { p.status = 'Concluído'; p.dataConc = todayISO(); }
+  syncObra(o); save(); render(); toast(p.status === 'Concluído' ? `✅ Passo concluído · obra em ${prog(o)}%` : `Passo reaberto · obra em ${prog(o)}%`);
+}
+function baixarPasso(o, pid) {
+  const p = o.passos.find(x => x.id === pid), falta = [];
+  (p.mats || []).forEach(m => { const x = by(S.materiais, m.matId); if (!x || x.qtd < m.qtd) falta.push(`${x ? x.nome : '?'} (faltam ${num(m.qtd - (x ? x.qtd : 0))})`); });
+  if (falta.length) return toast('Estoque insuficiente: ' + falta.join(', '));
+  confirmBox(`Dar baixa dos materiais deste passo no estoque? Será registrada uma saída para <b>${esc(o.nome)}</b>, no valor de ${brl(matCost(p))}.`, () => {
+    p.mats.forEach(m => { const x = by(S.materiais, m.matId); x.qtd -= m.qtd; o.gasto = (o.gasto || 0) + m.qtd * x.custo; S.movs.unshift({ id: uid('v'), data: todayISO(), matId: x.id, tipo: 'Saída', qtd: m.qtd, obraId: o.id, obs: ordName(o.passos.indexOf(p)) + ': ' + p.nome }); });
+    p.baixado = true; save(); render(); toast('Materiais baixados do estoque');
+  }, 'Dar baixa');
+}
+function payContrato(cid) {
+  const c = by(S.contratos, cid), saldo = c.valor - c.pago;
+  modal('💵 Registrar pagamento', `<p class="sm mut" style="margin-bottom:14px"><b>${esc(c.nome)}</b> · ${esc(c.empresa)}<br>Saldo a pagar: <b>${brl(saldo)}</b></p><form class="form" id="frm"><label>Valor pago (R$)<input name="v" type="number" step="any" min="0.01" max="${saldo}" value="${saldo}" required></label><label>Data<input name="d" type="date" value="${todayISO()}"></label></form>`,
+    `<button class="btn ghost" data-close>Cancelar</button><button class="btn" id="frmOk">Registrar</button>`);
+  $('#frmOk').onclick = () => {
+    const fm = $('#frm'); if (!fm.reportValidity()) return;
+    const v = parseFloat(fm.elements.v.value) || 0, o = by(S.obras, c.obraId);
+    c.pago += v; if (c.pago >= c.valor && c.status === 'Vigente') c.status = 'Concluído'; if (o) o.gasto = (o.gasto || 0) + v;
+    S.lancamentos.push({ id: uid('d'), data: fm.elements.d.value, desc: 'Pagamento de contrato: ' + c.nome, tipo: 'Despesa', valor: v, obraId: c.obraId });
+    save(); closeModal(); render(); toast('Pagamento de ' + brl(v) + ' registrado');
+  };
+}
+function movePasso(o, pid, dir) {
+  const i = o.passos.findIndex(x => x.id === pid), j = i + dir; if (j < 0 || j >= o.passos.length) return;
+  [o.passos[i], o.passos[j]] = [o.passos[j], o.passos[i]]; save(); render();
+}
+function exportPassos(o) {
+  const cols = ['Ordem', 'Passo', 'Situação', 'Início', 'Prazo', 'Peso', 'Custo previsto', 'Concluído em'];
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const csv = [cols.join(';')].concat(o.passos.map((p, i) => [ordName(i), p.nome, p.status, p.ini, p.fim, p.peso, passoCost(p).toFixed(2).replace('.', ','), p.dataConc].map(q).join(';'))).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })); a.download = 'passos-' + o.nome.replace(/\W+/g, '-').toLowerCase() + '.csv'; a.click(); toast('CSV gerado');
+}
+
 /* ============ navegação e render ============ */
-const NAV = [['dashboard', '📊', 'Painel geral'], ['obras', '🏗️', 'Obras'], ['empreendimentos', '🏢', 'Condomínios'], ['estoque', '📦', 'Estoque e insumos'], ['funcionarios', '👷', 'Funcionários'], ['fornecedores', '🚚', 'Fornecedores'], ['financeiro', '💰', 'Financeiro'], ['tarefas', '✅', 'Tarefas']];
+const NAV = [['dashboard', '📊', 'Painel geral'], ['obras', '🏗️', 'Obras'], ['andamento', '📈', 'Andamento'], ['empreendimentos', '🏢', 'Condomínios'], ['estoque', '📦', 'Estoque e insumos'], ['funcionarios', '👷', 'Funcionários'], ['fornecedores', '🚚', 'Fornecedores'], ['financeiro', '💰', 'Financeiro'], ['tarefas', '✅', 'Tarefas']];
 const route = () => { const r = (location.hash.replace('#/', '') || 'dashboard'); return PAGES[r] ? r : 'dashboard'; };
 function render() {
   const r = route();
@@ -364,6 +535,13 @@ const ACT = {
   lowonly: () => { state.f.estLow = !state.f.estLow; render(); },
   move: (id, b) => { by(S.tarefas, id).status = b.dataset.v; save(); render(); toast('Tarefa movida para "' + b.dataset.v + '"'); },
   quick: () => quick(),
+  selObra: id => { state.f.andObra = id; render(); },
+  pNew: () => openPasso(curObraId()), pEdit: id => openPasso(curObraId(), id),
+  pToggle: id => togglePasso(by(S.obras, curObraId()), id), pBaixa: id => baixarPasso(by(S.obras, curObraId()), id),
+  pUp: id => movePasso(by(S.obras, curObraId()), id, -1), pDown: id => movePasso(by(S.obras, curObraId()), id, 1),
+  pDel: id => { const o = by(S.obras, curObraId()), p = o.passos.find(x => x.id === id); confirmBox(`Excluir o passo <b>${esc(p.nome)}</b>?`, () => { o.passos = o.passos.filter(x => x.id !== id); syncObra(o); save(); render(); toast('Passo excluído'); }); },
+  pTpl: () => { const o = by(S.obras, curObraId()); o.passos = mkPassos(o, 0, false); save(); render(); toast('Modelo padrão aplicado: edite os passos como quiser'); },
+  pCsv: () => exportPassos(by(S.obras, curObraId())), cPay: id => payContrato(id),
   csv: (id, b) => exportCSV(b.dataset.k)
 };
 $('#view').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && ACT[b.dataset.act]) { e.stopPropagation(); ACT[b.dataset.act](b.dataset.id, b); } });

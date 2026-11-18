@@ -2,12 +2,34 @@
 const off = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const monthOff = n => { const d = new Date(); d.setDate(15); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 10); };
 
+const PASSO_TPL = [
+  ['Serviços preliminares e canteiro', .03, [['m11', 60], ['m12', 200]]],
+  ['Fundação', .10, [['m1', 900], ['m2', 350], ['m3', 80], ['m4', 60]]],
+  ['Estrutura (pilares, vigas e lajes)', .24, [['m1', 2500], ['m2', 900], ['m3', 160], ['m4', 140]]],
+  ['Alvenaria e vedação', .14, [['m5', 60], ['m6', 9000], ['m1', 500], ['m3', 90]]],
+  ['Instalações hidráulicas e elétricas', .14, [['m7', 320], ['m8', 70]]],
+  ['Cobertura e impermeabilização', .07, [['m1', 300]]],
+  ['Revestimentos e pisos', .12, [['m10', 1400], ['m1', 400]]],
+  ['Pintura e acabamento final', .10, [['m9', 160]]],
+  ['Vistoria, limpeza e entrega', .06, []]
+];
+// Gera os passos padrão de uma obra, distribuindo as datas entre início e previsão.
+function mkPassos(o, done, inProg) {
+  const t0 = new Date(o.inicio + 'T12:00:00').getTime(), t1 = new Date(o.previsao + 'T12:00:00').getTime(), n = PASSO_TPL.length;
+  const step = Math.max((t1 - t0) / n, 864e5 * 3), iso = t => new Date(t).toISOString().slice(0, 10);
+  return PASSO_TPL.map((p, i) => ({
+    id: 's' + Math.random().toString(36).slice(2, 9), nome: p[0], ini: iso(t0 + i * step), fim: iso(t0 + (i + 1) * step - 864e5), peso: 1,
+    status: i < done ? 'Concluído' : (i === done && inProg ? 'Em andamento' : 'Pendente'), dataConc: i < done ? iso(t0 + (i + 1) * step - 864e5) : '',
+    extra: Math.round((o.orcamento || 0) * p[1] * 0.9), mats: p[2].map(m => ({ matId: m[0], qtd: m[1] })), baixado: i < done, obs: ''
+  }));
+}
+
 function seedData() {
   const etapas = (a, b, c, d, e) => [
     { nome: 'Fundação', pct: a }, { nome: 'Estrutura', pct: b }, { nome: 'Alvenaria', pct: c },
     { nome: 'Instalações', pct: d }, { nome: 'Acabamento', pct: e }
   ];
-  return {
+  const d = {
     empreendimentos: [
       { id: 'e1', nome: 'Residencial Império Park', tipo: 'Condomínio de apartamentos', cidade: 'São Paulo', bairro: 'Vila Mariana', unidades: 120, vendidas: 84, reservadas: 12, vgv: 54000000, entrega: off(420), status: 'Em obras' },
       { id: 'e2', nome: 'Villa Imperial Alphaville', tipo: 'Condomínio de casas', cidade: 'Barueri', bairro: 'Alphaville', unidades: 48, vendidas: 31, reservadas: 5, vgv: 38400000, entrega: off(300), status: 'Em obras' },
@@ -81,4 +103,16 @@ function seedData() {
       ])
     ]
   };
+  const feitos = { o1: [5, 1], o2: [3, 1], o3: [6, 1], o4: [0, 0], o5: [9, 0], o6: [2, 0] };
+  d.obras.forEach(o => { const f = feitos[o.id] || [0, 0]; o.passos = mkPassos(o, f[0], !!f[1]); delete o.etapas; });
+  d.contratos = [
+    { id: 'c1', obraId: 'o1', nome: 'Empreitada de estrutura - Torre A', empresa: 'Construtora Alicerce Ltda', tipo: 'Empreitada', status: 'Vigente', valor: 4200000, pago: 3100000, inicio: off(-250), fim: off(40), obs: 'Medição mensal' },
+    { id: 'c2', obraId: 'o1', nome: 'Fornecimento de concreto usinado', empresa: 'Concreto Forte S.A.', tipo: 'Fornecimento', status: 'Vigente', valor: 2800000, pago: 2400000, inicio: off(-240), fim: off(25), obs: '' },
+    { id: 'c3', obraId: 'o1', nome: 'Projeto de instalações', empresa: 'Projeta Engenharia', tipo: 'Serviço', status: 'Concluído', valor: 380000, pago: 380000, inicio: off(-330), fim: off(-200), obs: '' },
+    { id: 'c4', obraId: 'o2', nome: 'Empreitada de estrutura - Torre B', empresa: 'Construtora Alicerce Ltda', tipo: 'Empreitada', status: 'Vigente', valor: 3900000, pago: 1200000, inicio: off(-120), fim: off(220), obs: '' },
+    { id: 'c5', obraId: 'o3', nome: 'Empreitada de acabamento', empresa: 'Acabamentos Prime', tipo: 'Empreitada', status: 'Vigente', valor: 2200000, pago: 1100000, inicio: off(-100), fim: off(-5), obs: 'Prazo vencido, renegociar' },
+    { id: 'c6', obraId: 'o4', nome: 'Sondagem e projeto de fundação', empresa: 'GeoSolo Engenharia', tipo: 'Projeto', status: 'Vigente', valor: 290000, pago: 145000, inicio: off(-20), fim: off(60), obs: '' },
+    { id: 'c7', obraId: 'o6', nome: 'Empreitada do clube', empresa: 'Lazer & Obras Ltda', tipo: 'Empreitada', status: 'Rascunho', valor: 1500000, pago: 0, inicio: off(10), fim: off(190), obs: 'Aguardando retomada da obra' }
+  ];
+  return d;
 }
