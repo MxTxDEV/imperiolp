@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Império ERP | Gestão de Obras e Empreendimentos</title>
+<meta name="description" content="Painel de gestão da Império Negócios Imobiliários: obras, empreendimentos, estoque, funcionários e financeiro.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand"><div class="logo">I</div><div><b>Império</b><small>Negócios Imobiliários</small></div></div>
+    <nav id="nav"></nav>
+    <div class="side-foot">
+      <button class="btn ghost sm" id="btnReset">↺ Restaurar dados de exemplo</button>
+      <small>Dados salvos neste navegador</small>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button class="icon-btn menu" id="btnMenu" aria-label="Menu">☰</button>
+      <div class="search"><span>🔍</span><input id="q" placeholder="Buscar em tudo nesta tela..." autocomplete="off"></div>
+      <div class="top-r">
+        <button class="btn sm" id="btnQuick">+ Ação rápida</button>
+        <button class="icon-btn" id="btnBell" aria-label="Alertas">🔔<i id="bellN" class="badge">0</i></button>
+        <button class="icon-btn" id="btnTheme" aria-label="Tema">🌗</button>
+        <div class="user"><span>AD</span><div><b>Administrador</b><small>Acesso total</small></div></div>
+      </div>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+<div id="modal" class="modal" hidden></div>
+<div id="toast" class="toast"></div>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
