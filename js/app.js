@@ -4,8 +4,10 @@
 const KEY = 'imperio_erp_v1';
 let S;
 try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
-if (!S || !S.obras) S = seedData();
+let migrado = false;
+if (!S || !S.obras) S = seedData(); else migrado = migrateData(S);
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+if (migrado) save();
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const brl = n => (+n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -60,7 +62,8 @@ const SCHEMA = {
     { k: 'status', l: 'Status', type: 'select', o: () => opt(['Aberta', 'Em andamento', 'Resolvida']) }, { k: 'prazo', l: 'Prazo', type: 'date' }] },
   lancamentos: { t: 'Lançamento', f: [
     { k: 'desc', l: 'Descrição', full: 1, req: 1 }, { k: 'tipo', l: 'Tipo', type: 'select', o: () => opt(['Receita', 'Despesa']) },
-    { k: 'valor', l: 'Valor (R$)', type: 'number' }, { k: 'data', l: 'Data', type: 'date' }, { k: 'obraId', l: 'Obra', type: 'select', o: refOpt('obras', 1) }] }
+    { k: 'valor', l: 'Valor (R$)', type: 'number' }, { k: 'data', l: 'Data', type: 'date' }, { k: 'obraId', l: 'Obra', type: 'select', o: refOpt('obras', 1) },
+    { k: 'empId', l: 'Empreendimento (receitas de venda)', type: 'select', o: refOpt('empreendimentos', 1) }] }
 };
 const DEFAULTS = {
   obras: () => ({ status: 'Planejamento', orcamento: 0, gasto: 0, inicio: todayISO(), previsao: todayISO(), empId: (S.empreendimentos[0] || {}).id || '', etapas: ['Fundação', 'Estrutura', 'Alvenaria', 'Instalações', 'Acabamento'].map(n => ({ nome: n, pct: 0 })) }),
@@ -69,7 +72,7 @@ const DEFAULTS = {
   funcionarios: () => ({ status: 'Ativo', obraId: '', salario: 0, adm: todayISO() }),
   fornecedores: () => ({ prazo: 3 }),
   tarefas: () => ({ prio: 'Média', status: 'Aberta', obraId: '', prazo: todayISO() }),
-  lancamentos: () => ({ tipo: 'Despesa', valor: 0, data: todayISO(), obraId: '' })
+  lancamentos: () => ({ tipo: 'Despesa', valor: 0, data: todayISO(), obraId: '', empId: '' })
 };
 
 /* ============ UI base: modal, toast ============ */
@@ -143,19 +146,6 @@ function openMov(tipo, matId) {
 }
 
 /* ============ gráficos SVG ============ */
-function barChart(items, ca = 'var(--blue)', cb = 'var(--gold)') {
-  const W = 640, H = 270, pl = 54, pb = 46, pt = 12, max = Math.max(1, ...items.flatMap(i => [i.a, i.b])) * 1.1;
-  const bw = (W - pl) / items.length;
-  let g = '';
-  for (let i = 0; i <= 4; i++) { const y = pt + (H - pb - pt) * (1 - i / 4); g += `<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" style="stroke:var(--line)"/><text x="${pl - 8}" y="${y + 4}" text-anchor="end">${brlS(max * i / 4).replace('R$ ', '')}</text>`; }
-  items.forEach((it, i) => {
-    const x = pl + i * bw + bw * .16, w = bw * .33, hh = H - pb - pt;
-    const h1 = it.a / max * hh, h2 = it.b / max * hh;
-    g += `<rect x="${x}" y="${H - pb - h1}" width="${w}" height="${h1}" rx="4" style="fill:${ca}"/><rect x="${x + w + 3}" y="${H - pb - h2}" width="${w}" height="${h2}" rx="4" style="fill:${cb}"/>
-      <text x="${pl + i * bw + bw / 2}" y="${H - pb + 17}" text-anchor="middle">${esc(it.label.length > 13 ? it.label.slice(0, 12) + '…' : it.label)}</text>`;
-  });
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
-}
 function lineChart(labels, series) {
   const W = 640, H = 250, pl = 54, pb = 32, pt = 12, max = Math.max(1, ...series.flatMap(s => s.d)) * 1.1, n = labels.length;
   const X = i => pl + (W - pl - 16) * (n === 1 ? .5 : i / (n - 1)), Y = v => pt + (H - pb - pt) * (1 - v / max);
@@ -167,12 +157,6 @@ function lineChart(labels, series) {
     g += `<polygon points="${X(0)},${H - pb} ${pts} ${X(n - 1)},${H - pb}" style="fill:${s.c};opacity:.1"/><polyline points="${pts}" fill="none" style="stroke:${s.c};stroke-width:3;stroke-linejoin:round;stroke-linecap:round"/>` + s.d.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="4" style="fill:${s.c}"/>`).join('');
   });
   return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
-}
-function donut(parts) {
-  const tot = parts.reduce((s, p) => s + p.v, 0) || 1, R = 52, C = 2 * Math.PI * R; let off = 0;
-  const arcs = parts.filter(p => p.v).map(p => { const len = p.v / tot * C, s = `<circle r="${R}" cx="70" cy="70" fill="none" stroke-width="20" style="stroke:${p.c}" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`; off += len; return s; }).join('');
-  return `<div class="donut-w"><svg viewBox="0 0 140 140" width="150" height="150">${arcs}<text x="70" y="68" text-anchor="middle" style="fill:var(--txt);font-size:26px;font-weight:700;font-family:Sora">${tot === 1 && !parts.some(p => p.v) ? 0 : parts.reduce((s, p) => s + p.v, 0)}</text><text x="70" y="86" text-anchor="middle" style="font-size:10px">obras</text></svg>
-    <div class="legend" style="flex-direction:column;gap:8px">${parts.map(p => `<span><i style="background:${p.c}"></i>${esc(p.l)}: <b style="color:var(--txt)">${p.v}</b></span>`).join('')}</div></div>`;
 }
 const bar = (p, c = '') => `<div class="bar ${c}"><i style="width:${Math.min(100, Math.max(0, p))}%"></i></div>`;
 
@@ -202,37 +186,7 @@ const exportBtn = k => `<button class="btn ghost" data-act="csv" data-k="${k}">�
 /* ============ PÁGINAS ============ */
 const PAGES = {};
 
-PAGES.dashboard = () => {
-  const ativas = S.obras.filter(o => o.status === 'Em andamento'), atras = S.obras.filter(isLate);
-  const unid = S.empreendimentos.reduce((s, e) => s + e.unidades, 0), vend = S.empreendimentos.reduce((s, e) => s + e.vendidas, 0);
-  const orcT = S.obras.filter(o => o.status !== 'Concluída').reduce((s, o) => s + o.orcamento, 0), gT = S.obras.filter(o => o.status !== 'Concluída').reduce((s, o) => s + o.gasto, 0);
-  const func = S.funcionarios.filter(f => f.status === 'Ativo').length, baixos = S.materiais.filter(low).length;
-  const valEst = S.materiais.reduce((s, m) => s + m.qtd * m.custo, 0);
-  const rec = S.lancamentos.filter(l => l.tipo === 'Receita').reduce((s, l) => s + l.valor, 0), dsp = S.lancamentos.filter(l => l.tipo === 'Despesa').reduce((s, l) => s + l.valor, 0);
-  const meses = monthly(6), al = alerts();
-  const st = ['Em andamento', 'Planejamento', 'Pausada', 'Concluída'], cor = { 'Em andamento': 'var(--blue)', 'Planejamento': 'var(--purple)', 'Pausada': 'var(--orange)', 'Concluída': 'var(--green)' };
-  const hora = new Date().getHours(), sau = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-  return header(`${sau}, Império 👋`, 'Visão geral de obras, vendas, estoque e finanças em tempo real.',
-    `<button class="btn ghost" data-act="new" data-k="obras">+ Obra</button><button class="btn ghost" data-act="mov" data-v="Entrada">📥 Entrada</button><button class="btn ghost" data-act="mov" data-v="Saída">📤 Saída</button><button class="btn" data-act="quick">+ Ação rápida</button>`) + `
-  <div class="grid g-kpi">
-    ${kpi('🏗️', 'blue', ativas.length, 'Obras em andamento', atras.length ? `<span class="down">▼ ${atras.length} atrasada(s)</span>` : '<span class="up">▲ Todas no prazo</span>')}
-    ${kpi('🏢', 'gold', brlS(S.empreendimentos.reduce((s, e) => s + e.vgv, 0)), 'VGV total', `<span class="up">${pct(vend, unid)}% das unidades vendidas</span>`)}
-    ${kpi('💰', 'green', brlS(rec - dsp), 'Saldo (6 meses)', `<span class="mut">Receitas ${brlS(rec)} · Despesas ${brlS(dsp)}</span>`)}
-    ${kpi('📊', 'purple', pct(gT, orcT) + '%', 'Orçamento executado', `<span class="mut">${brlS(gT)} de ${brlS(orcT)}</span>`)}
-    ${kpi('👷', 'orange', func, 'Funcionários ativos', `<span class="mut">${S.funcionarios.length} cadastrados</span>`)}
-    ${kpi('📦', baixos ? 'red' : 'green', baixos, 'Itens com estoque baixo', `<span class="mut">Estoque: ${brlS(valEst)}</span>`)}
-  </div>
-  <div class="grid g-2" style="margin-bottom:18px">
-    <div class="card"><h3>Orçamento x Gasto por obra <small>obras não concluídas</small></h3>${barChart(S.obras.filter(o => o.status !== 'Concluída').map(o => ({ label: o.nome.replace('Império Park - ', 'Park '), a: o.orcamento, b: o.gasto })))}<div class="legend"><span><i style="background:var(--blue)"></i>Orçamento</span><span><i style="background:var(--gold)"></i>Gasto</span></div></div>
-    <div class="card"><h3>Fluxo de caixa <small>últimos 6 meses</small></h3>${lineChart(meses.map(m => m.l), [{ n: 'Receitas', c: 'var(--green)', d: meses.map(m => m.r) }, { n: 'Despesas', c: 'var(--red)', d: meses.map(m => m.d) }])}<div class="legend"><span><i style="background:var(--green)"></i>Receitas</span><span><i style="background:var(--red)"></i>Despesas</span></div></div>
-  </div>
-  <div class="grid g-3">
-    <div class="card"><h3>🚨 Alertas <small>${al.length} pendência(s)</small></h3>${alertList(al.slice(0, 6), '✅ Nenhuma pendência. Tudo sob controle!')}</div>
-    <div class="card"><h3>Status das obras</h3>${donut(st.map(s => ({ l: s, v: S.obras.filter(o => o.status === s).length, c: cor[s] })))}
-      <h3 style="margin-top:22px">Vendas por empreendimento</h3>${S.empreendimentos.map(e => `<div style="margin-bottom:12px"><div class="row sm"><b>${esc(e.nome)}</b><span class="mut">${e.vendidas}/${e.unidades}</span></div>${bar(pct(e.vendidas, e.unidades), 'g')}</div>`).join('')}</div>
-    <div class="card"><h3>Últimas movimentações <a href="#/estoque" class="sm" style="color:var(--gold2)">ver todas</a></h3><div class="list">${S.movs.slice(0, 6).map(v => { const m = by(S.materiais, v.matId); return `<div class="li"><span class="dot c-${v.tipo === 'Entrada' ? 'green' : 'orange'}">${v.tipo === 'Entrada' ? '📥' : '📤'}</span><div><b>${esc(m ? m.nome : 'Material removido')}</b><small>${dt(v.data)} · ${esc(v.obraId ? nm(S.obras, v.obraId) : v.obs || '—')}</small></div><div class="end">${v.tipo === 'Entrada' ? '+' : '−'}${num(v.qtd)} <small>${esc(m ? m.un : '')}</small></div></div>`; }).join('') || '<p class="empty">Sem movimentações</p>'}</div></div>
-  </div>`;
-};
+PAGES.dashboard = () => BI.page();
 function monthly(n) {
   const out = [], now = new Date();
   for (let i = n - 1; i >= 0; i--) {
@@ -335,7 +289,7 @@ PAGES.financeiro = () => {
   <div class="grid g-kpi">${kpi('📈', 'green', brlS(rec), 'Receitas')}${kpi('📉', 'red', brlS(dsp), 'Despesas')}${kpi('💰', rec >= dsp ? 'gold' : 'red', brlS(rec - dsp), 'Saldo')}${kpi('🎯', 'purple', pct(rec - dsp, rec) + '%', 'Margem')}</div>
   <div class="card" style="margin-bottom:18px"><h3>Receitas x Despesas <small>mensal</small></h3>${lineChart(m.map(x => x.l), [{ c: 'var(--green)', d: m.map(x => x.r) }, { c: 'var(--red)', d: m.map(x => x.d) }])}</div>
   <div class="filters"><select data-sel="ft">${['Todos', 'Receita', 'Despesa'].map(x => `<option ${x === t ? 'selected' : ''}>${x}</option>`).join('')}</select></div>` +
-    table([{ h: 'Data', f: l => dt(l.data) }, { h: 'Descrição', f: l => `<b>${esc(l.desc)}</b>` }, { h: 'Tipo', f: l => pill(l.tipo) }, { h: 'Obra', f: l => esc(nm(S.obras, l.obraId)) }, { h: 'Valor', f: l => `<b class="${l.tipo === 'Receita' ? 'up' : 'down'}">${l.tipo === 'Receita' ? '+' : '−'} ${brl(l.valor)}</b>` }], ls, 'lancamentos');
+    table([{ h: 'Data', f: l => dt(l.data) }, { h: 'Descrição', f: l => `<b>${esc(l.desc)}</b>` }, { h: 'Tipo', f: l => pill(l.tipo) }, { h: 'Obra / Empreend.', f: l => esc(l.obraId ? nm(S.obras, l.obraId) : l.empId ? nm(S.empreendimentos, l.empId) : '—') }, { h: 'Valor', f: l => `<b class="${l.tipo === 'Receita' ? 'up' : 'down'}">${l.tipo === 'Receita' ? '+' : '−'} ${brl(l.valor)}</b>` }], ls, 'lancamentos');
 };
 
 PAGES.tarefas = () => {
@@ -387,5 +341,6 @@ $('#btnReset').onclick = () => confirmBox('Restaurar os dados de exemplo? Todos 
 let theme = 'dark'; try { theme = localStorage.getItem('imperio_theme') || 'dark'; } catch (e) {}
 document.documentElement.dataset.theme = theme;
 $('#btnTheme').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('imperio_theme', theme); } catch (e) {} };
+BI.init({ S: () => S, by, nm, esc, brl, brlS, num, dt, daysTo, prog, isLate, low, pill, COLOR, header, modal, closeModal, toast, render, openObra });
 render();
 })();
