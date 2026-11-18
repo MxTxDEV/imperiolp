@@ -190,8 +190,8 @@ function delta(cur, prev, goodUp, what) {
 function spark(vals, color) {
   if (vals.length < 2) return '';
   const W = 100, H = 30, lo = Math.min(...vals), hi = Math.max(...vals), sp = hi - lo || 1;
-  const pts = vals.map((v, i) => `${(i / (vals.length - 1) * W).toFixed(1)},${(H - 3 - (v - lo) / sp * (H - 6)).toFixed(1)}`);
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,${H} ${pts.join(' ')} ${W},${H}" style="fill:${color};opacity:.14"/><polyline points="${pts.join(' ')}" fill="none" style="stroke:${color}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+  const d = CK.smooth(vals.map((v, i) => [i / (vals.length - 1) * W, H - 3 - (v - lo) / sp * (H - 6)]));
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}L${W},${H}L0,${H}Z" style="fill:${color};opacity:.16"/><path d="${d}" fill="none" style="stroke:${color}" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
 }
 function kpiCard(k) {
   return `<div class="bk" ${a('drill', k.id)} ${tip(k.l, ...k.tip)}>
@@ -217,15 +217,15 @@ function cashChart(M) {
   const vals = M.series.flatMap(x => [x.r, x.d, x.s]).concat(cmp ? M.prev.flatMap(x => [x.r, x.d]) : []);
   const hi = Math.max(1, ...vals) * 1.1, lo = Math.min(0, ...vals) * 1.1;
   const Y = v => pt + (H - pb - pt) * (1 - (v - lo) / (hi - lo)), slot = (W - pl - pr) / n, X = i => pl + slot * (i + .5), bw = clamp(slot * 0.32, 6, 30);
-  let g = '';
+  let g = `<defs>${CK.vg('bgR', 'var(--c1)', .3)}${CK.vg('bgD', 'var(--c2)', .3)}</defs>`;
   for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4, y = Y(v); g += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" class="gl"/><text x="${pl - 8}" y="${y + 4}" text-anchor="end">${R$s(v).replace('R$ ', '')}</text>`; }
   g += `<line x1="${pl}" x2="${W - pr}" y1="${Y(0)}" y2="${Y(0)}" class="gz"/>`;
-  const line = (arr, key, cls) => `<polyline class="${cls}" fill="none" points="${arr.map((x, i) => `${X(i)},${Y(x[key])}`).join(' ')}"/>`;
+  const line = (arr, key, cls) => `<path class="${cls}" fill="none" d="${CK.smooth(arr.map((x, i) => [X(i), Y(x[key])]))}"/>`;
   if (cmp) g += line(M.prev, 'r', 'ln-prev c1') + line(M.prev, 'd', 'ln-prev c2');
   M.series.forEach((x, i) => {
     const an = M.anom.filter(z => z.k === x.k), cx = X(i);
-    g += `<rect class="cbar c1" x="${cx - bw - 1}" y="${Y(Math.max(x.r, 0))}" width="${bw}" height="${Math.max(0, Y(0) - Y(Math.max(x.r, 0)))}" rx="3"/>`;
-    g += `<rect class="cbar c2" x="${cx + 1}" y="${Y(Math.max(x.d, 0))}" width="${bw}" height="${Math.max(0, Y(0) - Y(Math.max(x.d, 0)))}" rx="3"/>`;
+    g += `<path class="cbar c1" style="fill:url(#bgR)" d="${CK.tb(cx - bw - 2, Y(Math.max(x.r, 0)), bw, Math.max(0, Y(0) - Y(Math.max(x.r, 0))), 6)}"/>`;
+    g += `<path class="cbar c2" style="fill:url(#bgD)" d="${CK.tb(cx + 2, Y(Math.max(x.d, 0)), bw, Math.max(0, Y(0) - Y(Math.max(x.d, 0))), 6)}"/>`;
     if (an.length) g += `<text class="anom" x="${cx}" y="${Math.min(Y(x.r), Y(x.d)) - 7}" text-anchor="middle">⚠</text>`;
     const p = cmp ? M.prev[i] : null, lines = [mLong(x.k), `Receita: ${R$(x.r)}`, `Despesa: ${R$(x.d)}`, `Resultado: ${R$(x.s)} (margem ${fp(ratio(x.s, x.r))})`];
     if (p) lines.push(`Mês equivalente anterior (${mLong(p.k)}): receita ${R$s(p.r)} · despesa ${R$s(p.d)}`);
@@ -234,7 +234,7 @@ function cashChart(M) {
     g += `<rect class="hit" x="${cx - slot / 2}" y="${pt}" width="${slot}" height="${H - pb - pt}" ${a('drill', 'm:' + x.k)} ${tip(...lines)}/>`;
     g += `<text x="${cx}" y="${H - 12}" text-anchor="middle">${mShort(x.k)}${n > 7 || x.k.endsWith('-01') ? '/' + x.k.slice(2, 4) : ''}</text>`;
   });
-  g += `<polyline class="ln-res" fill="none" points="${M.series.map((x, i) => `${X(i)},${Y(x.s)}`).join(' ')}"/>` + M.series.map((x, i) => `<circle class="dot-res" cx="${X(i)}" cy="${Y(x.s)}" r="4"/>`).join('');
+  g += `<path class="ln-res" fill="none" d="${CK.smooth(M.series.map((x, i) => [X(i), Y(x.s)]))}"/>` + M.series.map((x, i) => `<circle class="dot-res" cx="${X(i)}" cy="${Y(x.s)}" r="4"/>`).join('');
   return `<svg class="chart bi-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Receitas, despesas e resultado por mês: receita ${R$s(M.R)}, despesa ${R$s(M.D)}.">${g}</svg>
   <div class="legend"><span><i class="lg c1"></i>Receita</span><span><i class="lg c2"></i>Despesa</span><span><i class="lg-l"></i>Resultado</span>${cmp ? '<span><i class="lg-d"></i>Período anterior (receita e despesa)</span>' : ''}${M.anom.some(z => M.months.includes(z.k)) ? '<span>⚠ Desvio ≥ 30% da média móvel</span>' : ''}</div>`;
 }
@@ -298,9 +298,9 @@ function statusPanel(M) {
   const parts = STATUS.map((s, i) => ({ s, v: M.obras.filter(o => o.status === s).length, bac: sum(M.obras.filter(o => o.status === s), o => o.orcamento), c: ['var(--c5)', 'var(--c1)', 'var(--c2)', 'var(--c3)'][i] }));
   const tot = sum(parts, p => p.v);
   if (!tot) return empty('Nenhuma obra para os filtros atuais.');
-  const R = 52, CC = 2 * Math.PI * R, any = st.sel.status.i.length > 0; let off = 0;
-  const arcs = parts.filter(p => p.v).map(p => {
-    const len = p.v / tot * CC, on = st.sel.status.i.includes(p.s), s = `<circle ${a('toggle', p.s, 'status')} ${tip(p.s, `${p.v} obra(s) · orçamento ${R$s(p.bac)}`, 'Clique para filtrar por este status')} r="${R}" cx="70" cy="70" fill="none" stroke-width="${on ? 24 : 20}" style="stroke:${p.c};opacity:${any && !on ? .35 : 1}" stroke-dasharray="${len} ${CC - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)" class="slice"/>`; off += len; return s;
+  const R = 52, CC = 2 * Math.PI * R, any = st.sel.status.i.length > 0, nv = parts.filter(p => p.v).length; let off = 0;
+  const arcs = `<circle r="${R}" cx="70" cy="70" fill="none" stroke-width="18" style="stroke:var(--panel2)"/>` + parts.filter(p => p.v).map(p => {
+    const len = p.v / tot * CC, on = st.sel.status.i.includes(p.s), s = `<circle ${a('toggle', p.s, 'status')} ${tip(p.s, `${p.v} obra(s) · orçamento ${R$s(p.bac)}`, 'Clique para filtrar por este status')} r="${R}" cx="70" cy="70" fill="none" stroke-width="${on ? 22 : 18}" style="stroke:${p.c};opacity:${any && !on ? .35 : 1}" ${CK.ringDash(len, CC, nv, 10)} stroke-dashoffset="${-off}" transform="rotate(-90 70 70)" class="slice"/>`; off += len; return s;
   }).join('');
   return `<div class="donut-w"><svg viewBox="0 0 140 140" width="150" height="150" role="img" aria-label="${tot} obras por status">${arcs}<text x="70" y="70" text-anchor="middle" class="dn">${tot}</text><text x="70" y="88" text-anchor="middle" style="font-size:10px">obras</text></svg>
   <div class="dl-list">${parts.map(p => `<button class="dl-i ${st.sel.status.i.includes(p.s) ? 'sel' : ''}" ${a('toggle', p.s, 'status')}><i class="lg" style="background:${p.c}"></i><span>${p.s}</span><small class="mut">${R$s(p.bac)}</small><b>${p.v}</b></button>`).join('')}</div></div>`;
