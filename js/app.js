@@ -196,7 +196,7 @@ function table(cols, rows, k, extraActs) {
 }
 const header = (t, sub, acts) => `<div class="page-h"><div><h1>${t}</h1><p>${sub}</p></div><div class="acts">${acts || ''}</div></div>`;
 const chips = (k, opts) => `<div class="chips">${opts.map(o => `<button class="chip ${fil(k) === o ? 'on' : ''}" data-act="filter" data-k="${k}" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div>`;
-const kpi = (ic, c, v, l, d) => `<div class="card kpi"><div class="ic c-${c}">${ic}</div><div class="v">${v}</div><div class="l">${l}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
+const kpi = (ic, c, v, l, d) => `<div class="kpi kf"><div class="kf-h"><span class="ic c-${c}">${ic}</span><span class="l">${l}</span></div><div class="v">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
 const exportBtn = k => `<button class="btn ghost" data-act="csv" data-k="${k}">⬇ Exportar CSV</button>`;
 
 /* ============ PÁGINAS ============ */
