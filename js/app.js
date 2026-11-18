@@ -75,7 +75,8 @@ const SCHEMA = {
   lancamentos: { t: 'Lançamento', f: [
     { k: 'desc', l: 'Descrição', full: 1, req: 1 }, { k: 'tipo', l: 'Tipo', type: 'select', o: () => opt(['Receita', 'Despesa']) },
     { k: 'valor', l: 'Valor (R$)', type: 'number' }, { k: 'data', l: 'Data', type: 'date' }, { k: 'obraId', l: 'Obra', type: 'select', o: refOpt('obras', 1) },
-    { k: 'empId', l: 'Empreendimento (receitas de venda)', type: 'select', o: refOpt('empreendimentos', 1) }] }
+    { k: 'empId', l: 'Empreendimento (receitas de venda)', type: 'select', o: refOpt('empreendimentos', 1) },
+    { k: 'cat', l: 'Categoria (vazio = automática)', type: 'select', o: () => [{ v: '', l: '— automática —' }].concat(opt(FIN.CATS.Receita.concat(FIN.CATS.Despesa))) }] }
 };
 const DEFAULTS = {
   obras: () => ({ status: 'Planejamento', orcamento: 0, gasto: 0, inicio: todayISO(), previsao: todayISO(), empId: (S.empreendimentos[0] || {}).id || '' }),
@@ -296,15 +297,7 @@ PAGES.fornecedores = () => {
     table([{ h: 'Fornecedor', f: f => `<span class="avatar">${initials(f.nome)}</span><b>${esc(f.nome)}</b>` }, { h: 'Categoria', f: f => esc(f.cat) }, { h: 'Prazo', f: f => f.prazo + ' dias' }, { h: 'Telefone', f: f => esc(f.tel) }, { h: 'E-mail', f: f => esc(f.email) }, { h: 'Itens', f: f => S.materiais.filter(m => m.forn === f.id).length }], rows, 'fornecedores');
 };
 
-PAGES.financeiro = () => {
-  const t = fil('ft'), ls = S.lancamentos.filter(l => (t === 'Todos' || l.tipo === t) && match(l, nm(S.obras, l.obraId))).sort((a, b) => b.data.localeCompare(a.data));
-  const rec = S.lancamentos.filter(l => l.tipo === 'Receita').reduce((s, l) => s + l.valor, 0), dsp = S.lancamentos.filter(l => l.tipo === 'Despesa').reduce((s, l) => s + l.valor, 0), m = monthly(6);
-  return header('Financeiro', 'Receitas, despesas e fluxo de caixa consolidado.', exportBtn('lancamentos') + '<button class="btn" data-act="new" data-k="lancamentos">+ Novo lançamento</button>') + `
-  <div class="grid g-kpi">${kpi('📈', 'green', brlS(rec), 'Receitas')}${kpi('📉', 'red', brlS(dsp), 'Despesas')}${kpi('💰', rec >= dsp ? 'gold' : 'red', brlS(rec - dsp), 'Saldo')}${kpi('🎯', 'purple', pct(rec - dsp, rec) + '%', 'Margem')}</div>
-  <div class="card" style="margin-bottom:18px"><h3>Receitas x Despesas <small>mensal</small></h3>${lineChart(m.map(x => x.l), [{ c: 'var(--green)', d: m.map(x => x.r) }, { c: 'var(--red)', d: m.map(x => x.d) }])}</div>
-  <div class="filters"><select data-sel="ft">${['Todos', 'Receita', 'Despesa'].map(x => `<option ${x === t ? 'selected' : ''}>${x}</option>`).join('')}</select></div>` +
-    table([{ h: 'Data', f: l => dt(l.data) }, { h: 'Descrição', f: l => `<b>${esc(l.desc)}</b>` }, { h: 'Tipo', f: l => pill(l.tipo) }, { h: 'Obra / Empreend.', f: l => esc(l.obraId ? nm(S.obras, l.obraId) : l.empId ? nm(S.empreendimentos, l.empId) : '—') }, { h: 'Valor', f: l => `<b class="${l.tipo === 'Receita' ? 'up' : 'down'}">${l.tipo === 'Receita' ? '+' : '−'} ${brl(l.valor)}</b>` }], ls, 'lancamentos');
-};
+PAGES.financeiro = () => FIN.page();
 
 PAGES.tarefas = () => {
   const cols = ['Aberta', 'Em andamento', 'Resolvida'], rows = S.tarefas.filter(t => match(t, nm(S.obras, t.obraId)));
@@ -550,6 +543,7 @@ $('#btnReset').onclick = () => confirmBox('Restaurar os dados de exemplo? Todos 
 let theme = 'dark'; try { theme = localStorage.getItem('imperio_theme') || 'dark'; } catch (e) {}
 document.documentElement.dataset.theme = theme;
 $('#btnTheme').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('imperio_theme', theme); } catch (e) {} };
+FIN.init({ S: () => S, nm, esc, brl, brlS, dt, daysTo, header, pill, table, match, render });
 BI.init({ S: () => S, by, nm, esc, brl, brlS, num, dt, daysTo, prog, isLate, low, pill, COLOR, header, modal, closeModal, toast, render, openObra });
 render();
 })();
