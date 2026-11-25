@@ -102,7 +102,7 @@ function telhado(s) {
 
 function svg(est, label) {
   const e = k => est.find(x => x.k === k), t = e('terra'), f = e('fundacao'), p = e('placas'), r = e('telhado');
-  const g = (s, inner) => `<g class="st ${s.st}${s.late ? ' late' : ''}">${inner}</g>`, pl = placas(p), tl = telhado(r);
+  const g = (s, inner) => `<g class="st ${s.st}${s.late ? ' late' : ''}" data-k="${s.k}">${inner}</g>`, pl = placas(p), tl = telhado(r);
   return `<svg class="hg-svg" viewBox="-290 -205 640 510" role="img" aria-label="${C.esc(label)}">
   <defs><radialGradient id="hgDisk"><stop offset="0" stop-color="#43d9ff" stop-opacity=".22"/><stop offset=".7" stop-color="#43d9ff" stop-opacity=".07"/><stop offset="1" stop-color="#43d9ff" stop-opacity="0"/></radialGradient></defs>
   <ellipse cx="29" cy="119" rx="310" ry="165" fill="url(#hgDisk)"/>
@@ -116,12 +116,23 @@ function resumo(s) {
   const pc = Math.round(s.f * 100);
   return s.vazio ? 'Sem passo cadastrado' : s.st === 'done' ? 'Concluída' : s.st === 'doing' ? `Em andamento${pc ? ' · ' + pc + '%' : ''}${s.late ? ' · atrasada' : ''}` : s.late ? 'Não iniciada · atrasada' : 'Ainda não iniciada';
 }
+// passos de uma etapa, com controles de edição (somem na tela cheia, que é só para mostrar ao cliente)
+const pctDe = p => p.status === 'Concluído' ? 100 : p.status === 'Em andamento' ? Math.min(100, Math.max(0, +p.pct || 0)) : 0;
+function passoRow(p) {
+  const pc = pctDe(p), ok = p.status === 'Concluído', n = C.esc(p.nome);
+  return `<div class="hg-p ${ok ? 'done' : p.status === 'Em andamento' ? 'doing' : ''}"><div class="hg-p1"><span class="pn" title="${n}">${n}</span>
+    <span class="hg-ed"><button type="button" class="hg-b${ok ? ' on' : ''}" data-act="hgDone" data-id="${p.id}" title="${ok ? 'Reabrir passo' : 'Marcar como concluído'}" aria-label="${ok ? 'Reabrir' : 'Concluir'} ${n}">✓</button><button type="button" class="hg-b" data-act="pEdit" data-id="${p.id}" title="Editar passo" aria-label="Editar ${n}">✏️</button></span></div>
+    <div class="hg-ed hg-p2"><input type="range" class="hg-r" min="0" max="100" step="5" value="${pc}" data-hgpct="${p.id}" aria-label="Avanço de ${n}"><output>${pc}%</output></div></div>`;
+}
 function view(est, o) {
   const label = 'Desenho esquemático da obra. ' + est.map(s => s.nome + ': ' + resumo(s).toLowerCase()).join('. ') + '.';
+  const ps = o.passos || [], por = k => ps.filter(p => faseDe(p) === k), soltos = ps.filter(p => !faseDe(p));
   return `<div class="hg" id="hgBox"><div class="hg-scan" aria-hidden="true"></div>
   <div class="hg-top"><div><small>HOLOGRAMA DA OBRA</small><h3>${C.esc(o.titulo)}</h3>${o.sub ? `<p>${C.esc(o.sub)}</p>` : ''}</div><div class="hg-tot"><b>${o.total}%</b><small>concluído</small></div></div>
   <div class="hg-body"><div class="hg-fig">${svg(est, label)}</div>
-  <ol class="hg-st">${est.map((s, i) => `<li class="${s.st}${s.late ? ' late' : ''}"><span class="n" aria-hidden="true">${s.st === 'done' ? '✓' : i + 1}</span><div><b>${C.esc(s.nome)}</b><small>${C.esc(resumo(s))}${s.fim && s.st !== 'done' ? ' · prazo ' + C.esc(C.dt(s.fim)) : ''}</small><i class="hg-bar"><u style="width:${Math.round(s.f * 100)}%"></u></i></div></li>`).join('')}</ol></div>
+  <ol class="hg-st">${est.map((s, i) => `<li class="${s.st}${s.late ? ' late' : ''}" data-k="${s.k}"><span class="n" aria-hidden="true">${s.st === 'done' ? '✓' : i + 1}</span><div><b>${C.esc(s.nome)}</b><small>${C.esc(resumo(s))}${s.fim && s.st !== 'done' ? ' · prazo ' + C.esc(C.dt(s.fim)) : ''}</small><i class="hg-bar"><u style="width:${Math.round(s.f * 100)}%"></u></i>
+    <div class="hg-ps">${por(s.k).map(passoRow).join('')}<button type="button" class="hg-add hg-ed" data-act="pNewF" data-k="${s.k}">+ passo nesta etapa</button></div></div></li>`).join('')}</ol></div>
+  ${soltos.length ? `<div class="hg-solto hg-ed"><small>Passos sem etapa no desenho (edite o passo e escolha a etapa)</small>${soltos.map(passoRow).join('')}</div>` : ''}
   <p class="hg-foot">Desenho esquemático e ilustrativo. As proporções não representam o projeto real.</p></div>`;
 }
 

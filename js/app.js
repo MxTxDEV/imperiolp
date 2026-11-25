@@ -339,13 +339,13 @@ PAGES.andamento = () => {
     <div class="an-bar ${p === 100 ? 'ok' : ''}"><i style="width:${p}%"></i></div>
     <div class="an-stats">${stat('Avanço', p + '%', '', `${done} de ${ps.length} passos`)}${stat('Atrasados', late, late ? 'down' : '', late ? 'passo(s) fora do prazo' : 'nenhum')}${stat('Prazo final', dias >= 0 ? dias + ' dias' : -dias + ' dias', dias < 0 ? 'down' : '', dias >= 0 ? 'restantes' : 'de atraso')}${stat('Previsto', brlS(prevT), prevT > o.orcamento ? 'down' : '', 'de ' + brlS(o.orcamento) + ' orçados')}${stat('Contratos', brlS(cVal), '', cts.length + ' · pago ' + brlS(cPago))}</div></div>`;
   const tb = `<div class="an-tabs"><div class="seg-g" role="tablist">${tabs.map(t => `<button class="seg ${tab === t ? 'on' : ''}" role="tab" aria-selected="${tab === t}" data-act="tab" data-k="and" data-v="${t}">${t}</button>`).join('')}</div>
-    <div class="acts">${tab === 'Holograma' ? '<button class="btn ghost sm" data-act="hgFull">⛶ Tela cheia</button>' : tab === 'Passos' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="pCsv">⬇ CSV</button>' : tab === 'Contratos' ? '<button class="btn sm" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost sm" data-act="csv" data-k="contratos">⬇ CSV</button>' : ''}</div></div>`;
+    <div class="acts">${tab === 'Holograma' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="hgFull">⛶ Tela cheia</button>' : tab === 'Passos' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="pCsv">⬇ CSV</button>' : tab === 'Contratos' ? '<button class="btn sm" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost sm" data-act="csv" data-k="contratos">⬇ CSV</button>' : ''}</div></div>`;
   const body = tab === 'Holograma' ? tabHolo(o) : tab === 'Passos' ? tabPassos(o) : tab === 'Materiais e custos' ? tabMat(o) : tab === 'Contratos' ? tabCont(o, cts) : tabCron(o);
   return header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.') + strip + head + tb + body;
 };
 
 function tabHolo(o) {
-  return HOLO.view(HOLO.estado(o.passos, passoLate), { titulo: o.nome, sub: nm(S.empreendimentos, o.empId) + ' · ' + dt(o.inicio) + ' → ' + dt(o.previsao), total: prog(o) });
+  return HOLO.view(HOLO.estado(o.passos, passoLate), { titulo: o.nome, sub: nm(S.empreendimentos, o.empId) + ' · ' + dt(o.inicio) + ' → ' + dt(o.previsao), total: prog(o), passos: o.passos || [] });
 }
 
 function tabPassos(o) {
@@ -428,14 +428,15 @@ function tabCron(o) {
   <div class="legend" style="margin-top:14px"><span><i style="background:var(--green)"></i>Concluído</span><span><i style="background:var(--blue)"></i>Em andamento</span><span><i style="background:var(--mut)"></i>Pendente</span><span><i style="background:var(--red)"></i>Atrasado</span></div></div>`;
 }
 
-function openPasso(oid, pid) {
+function openPasso(oid, pid, fase0) {
   const o = by(S.obras, oid), cur = pid ? o.passos.find(x => x.id === pid) : null;
   const addD = (d, n) => { const t = new Date(d + 'T12:00:00'); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
   const lastP = o.passos[o.passos.length - 1], ini0 = lastP ? addD(lastP.fim, 1) : o.inicio;
-  const p = cur || { nome: '', status: 'Pendente', ini: ini0, fim: addD(ini0, 30), peso: 1, extra: 0, mats: [], obs: '' };
+  const p = cur || { nome: '', fase: fase0 || '', status: 'Pendente', ini: ini0, fim: addD(ini0, 30), peso: 1, extra: 0, mats: [], obs: '' };
   const mrow = m => `<div class="mrow"><select name="mat">${S.materiais.map(x => `<option value="${x.id}" ${x.id === m.matId ? 'selected' : ''}>${esc(x.nome)} (${esc(x.un)} · ${brl(x.custo)})</option>`).join('')}</select><input name="q" type="number" min="0" step="any" value="${m.qtd}" aria-label="Quantidade"><button type="button" class="btn red sm" data-rm>✕</button></div>`;
   modal(cur ? 'Editar passo' : 'Novo passo', `<form class="form" id="frm">
     <label class="full">Nome do passo<input name="nome" required value="${esc(p.nome)}" placeholder="Ex.: Fundação"></label>
+    ${o.tipoObra === 'Placas' ? `<label class="full">Etapa no holograma<select name="fase"><option value="">Automática (pelo nome do passo)</option>${HOLO.FASES.map(F => `<option value="${F.k}" ${F.k === (p.fase || '') ? 'selected' : ''}>${F.nome}</option>`).join('')}</select></label>` : ''}
     <label>Situação<select name="status">${['Pendente', 'Em andamento', 'Concluído'].map(s => `<option ${s === p.status ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
     <label>Avanço do passo (%) <small class="mut">só vale em andamento</small><input name="pct" type="number" min="0" max="100" step="5" value="${p.status === 'Em andamento' ? (p.pct || 0) : 0}"></label>
     <label class="full">Peso na barra (importância)<input name="peso" type="number" min="1" step="1" value="${p.peso || 1}"></label>
@@ -454,6 +455,7 @@ function openPasso(oid, pid) {
     if (!fm.reportValidity()) return;
     if (fm.elements.fim.value < fm.elements.ini.value) return toast('O prazo não pode ser antes do início');
     const d = { nome: fm.elements.nome.value.trim(), status: fm.elements.status.value, pct: 0, peso: Math.max(1, parseInt(fm.elements.peso.value) || 1), ini: fm.elements.ini.value, fim: fm.elements.fim.value, extra: parseFloat(fm.elements.extra.value) || 0, obs: fm.elements.obs.value.trim(), mats: rows() };
+    if (fm.elements.fase) d.fase = fm.elements.fase.value;
     d.pct = d.status === 'Concluído' ? 100 : d.status === 'Pendente' ? 0 : Math.min(100, Math.max(0, parseInt(fm.elements.pct.value) || 0));
     const was = cur ? cur.status : 'Pendente';
     d.dataConc = d.status === 'Concluído' ? (was === 'Concluído' && cur.dataConc ? cur.dataConc : todayISO()) : '';
@@ -465,6 +467,14 @@ function togglePasso(o, pid) {
   const p = o.passos.find(x => x.id === pid); if (!p) return;
   if (p.status === 'Concluído') { p.status = 'Pendente'; p.dataConc = ''; p.pct = 0; } else { p.status = 'Concluído'; p.dataConc = todayISO(); p.pct = 100; }
   syncObra(o); save(); render(); toast(p.status === 'Concluído' ? `✅ Passo concluído · obra em ${prog(o)}%` : `Passo reaberto · obra em ${prog(o)}%`);
+}
+// avanço pelo holograma: 0 = pendente, 100 = concluído, no meio = em andamento
+function setPct(o, pid, v) {
+  const p = o.passos.find(x => x.id === pid); if (!p) return;
+  v = Math.min(100, Math.max(0, v)); const was = p.status;
+  p.pct = v; p.status = v >= 100 ? 'Concluído' : v > 0 ? 'Em andamento' : 'Pendente';
+  p.dataConc = p.status === 'Concluído' ? (was === 'Concluído' && p.dataConc ? p.dataConc : todayISO()) : '';
+  syncObra(o); save(); render(); toast(p.nome + ': ' + v + '% · obra em ' + prog(o) + '%');
 }
 function baixarPasso(o, pid) {
   const p = o.passos.find(x => x.id === pid), falta = [];
@@ -524,6 +534,7 @@ const ACT = {
   pToggle: id => togglePasso(by(S.obras, curObraId()), id), pBaixa: id => baixarPasso(by(S.obras, curObraId()), id),
   pUp: id => movePasso(by(S.obras, curObraId()), id, -1), pDown: id => movePasso(by(S.obras, curObraId()), id, 1),
   pDel: id => { const o = by(S.obras, curObraId()), p = o.passos.find(x => x.id === id); confirmBox(`Excluir o passo <b>${esc(p.nome)}</b>?`, () => { o.passos = o.passos.filter(x => x.id !== id); syncObra(o); save(); render(); toast('Passo excluído'); }); },
+  pNewF: (id, b) => openPasso(curObraId(), null, b.dataset.k), hgDone: id => togglePasso(by(S.obras, curObraId()), id),
   pTpl: () => { const o = by(S.obras, curObraId()); o.passos = mkPassos(o, 0, false); save(); render(); toast('Modelo padrão aplicado: edite os passos como quiser'); },
   pCsv: () => exportPassos(by(S.obras, curObraId())), cPay: id => payContrato(id),
   hgFull: () => { const el = $('#hgBox'); if (el && el.requestFullscreen) el.requestFullscreen().catch(() => toast('Tela cheia indisponível neste navegador')); else toast('Tela cheia indisponível neste navegador'); },
@@ -531,6 +542,8 @@ const ACT = {
 };
 $('#view').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && ACT[b.dataset.act]) { e.stopPropagation(); ACT[b.dataset.act](b.dataset.id, b); } });
 $('#view').addEventListener('keydown', e => { const b = e.target.closest('[role=button][data-act]'); if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); b.click(); } });
+$('#view').addEventListener('input', e => { const r = e.target.closest('[data-hgpct]'); if (r && r.nextElementSibling) r.nextElementSibling.textContent = r.value + '%'; });
+$('#view').addEventListener('change', e => { const r = e.target.closest('[data-hgpct]'); if (r) setPct(by(S.obras, curObraId()), r.dataset.hgpct, parseInt(r.value) || 0); });
 $('#view').addEventListener('change', e => { const s = e.target.closest('[data-sel]'); if (s) { state.f[s.dataset.sel] = s.value; render(); } });
 
 function quick() {
