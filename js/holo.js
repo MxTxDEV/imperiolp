@@ -100,6 +100,112 @@ function telhado(s) {
   return { back: slope(-OH), front: slope(D + OH) };
 }
 
+
+/* ---------- modo realista: mesma obra, materiais e luz de verdade ---------- */
+const T = .18; // espessura das paredes de placa
+const hash = n => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
+const pt = (x, y, z) => [(x - y) * K * S, (x + y) * .5 * S - z * S];
+// caixa com 3 faces visíveis: fa (voltada p/ +y, clara), fb (voltada p/ +x, escura), ft (topo). Não construída = contorno fantasma.
+function rbox(x0, y0, z0, x1, y1, z1, mat, b) {
+  const c = b ? mat : 'gh';
+  return poly([[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], c + ' fa') + poly([[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]], c + ' fb') + poly([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], c + ' ft');
+}
+function chao() {
+  const x0 = -3, x1 = W + 3, y0 = -3, y1 = D + 3, z = -.55;
+  let o = poly([[x0, y1, z], [x1, y1, z], [x1, y1, 0], [x0, y1, 0]], 'soil fa') + poly([[x1, y0, z], [x1, y1, z], [x1, y1, 0], [x1, y0, 0]], 'soil fb')
+    + poly([[x0, y1, -.38], [x1, y1, -.38], [x1, y1, -.24], [x0, y1, -.24]], 'strata fa') + poly([[x1, y0, -.38], [x1, y1, -.38], [x1, y1, -.24], [x1, y0, -.24]], 'strata fb')
+    + poly([[x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0]], 'grass');
+  for (let i = 0; i < 60; i++) {
+    const x = x0 + .3 + hash(i * 3 + 1) * (x1 - x0 - .8), y = y0 + .3 + hash(i * 3 + 2) * (y1 - y0 - .8), s = .22 + hash(i * 3 + 3) * .38;
+    if (x > -1.8 && x < W + 1.8 && y > -1.8 && y < D + 1.8) continue;
+    o += poly([[x, y, 0], [x + s, y, 0], [x + s, y + s * .8, 0], [x, y + s * .8, 0]], 'tuft t' + (i % 3));
+  }
+  return o;
+}
+function arvore(x, y, k) {
+  const b = pt(x, y, 0), t = pt(x, y, 1.15 * k), c = pt(x, y, 2.05 * k), r = 25 * k;
+  return `<ellipse cx="${(b[0] + 14 * k).toFixed(1)}" cy="${(b[1] + 3).toFixed(1)}" rx="${(24 * k).toFixed(1)}" ry="${(9 * k).toFixed(1)}" class="tsh"/><line x1="${b[0].toFixed(1)}" y1="${b[1].toFixed(1)}" x2="${t[0].toFixed(1)}" y2="${t[1].toFixed(1)}" class="trunk" stroke-width="${(5 * k).toFixed(1)}"/>
+  <ellipse cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" rx="${r.toFixed(1)}" ry="${(r * 1.15).toFixed(1)}" fill="url(#hgLeaf)"/><ellipse cx="${(c[0] - r * .25).toFixed(1)}" cy="${(c[1] - r * .35).toFixed(1)}" rx="${(r * .5).toFixed(1)}" ry="${(r * .45).toFixed(1)}" class="leafhi"/>`;
+}
+function terraR(s) {
+  const nx = W + 3, ny = D + 3, n = cnt(nx * ny, s.f, s.st === 'doing');
+  let o = '';
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const x = -1.5 + i, y = -1.5 + j, b = j * nx + i < n;
+    o += poly([[x, y, .01], [x + 1, y, .01], [x + 1, y + 1, .01], [x, y + 1, .01]], b ? 'dirt d' + Math.floor(hash(j * nx + i + 7) * 4) : 'gh fl');
+  }
+  return o;
+}
+function fundacaoR(s) {
+  const seg = [];
+  for (let i = 0; i < W; i++) seg.push([i, 0, i + 1, WF]);
+  for (let j = 0; j < D; j++) seg.push([W - WF, j, W, j + 1]);
+  for (let i = W - 1; i >= 0; i--) seg.push([i, D - WF, i + 1, D]);
+  for (let j = D - 1; j >= 0; j--) seg.push([0, j, WF, j + 1]);
+  const n = cnt(seg.length, s.f, s.st === 'doing');
+  const laje = poly([[0, 0, .12], [W, 0, .12], [W, D, .12], [0, D, .12]], s.st === 'done' ? 'slab' : 'gh fl');
+  return laje + seg.map((q, i) => ({ q, b: i < n })).sort((a, c) => (a.q[0] + a.q[1]) - (c.q[0] + c.q[1]))
+    .map(x => rbox(x.q[0], x.q[1], 0, x.q[2], x.q[3], HF, 'fund', x.b)).join('');
+}
+function paredesR(s) {
+  const h = H - HF, L = [];
+  const add = (ax, box, face, back, op, i) => L.push({ ax, box, face, back, op, i });
+  for (let i = 0; i < W; i++) add('x', [i, 0, i + 1, T], T, 1, i === 3 ? 'j' : '', i);
+  for (let j = 0; j < D; j++) add('y', [W - T, j, W, j + 1], W, 0, j === 2 ? 'j' : '', j);
+  for (let i = W - 1; i >= 0; i--) add('x', [i, D - T, i + 1, D], D, 0, i === 2 ? 'p' : i === 1 || i === 5 ? 'j' : '', i);
+  for (let j = D - 1; j >= 0; j--) add('y', [0, j, T, j + 1], T, 1, j === 3 ? 'j' : '', j);
+  L.push({ tri: [[T, 0, H], [T, D, H], [T, D / 2, ZR]], back: 1 }, { tri: [[W, 0, H], [W, D, H], [W, D / 2, ZR]], back: 0 });
+  const n = cnt(L.length, s.f, s.st === 'doing');
+  const one = (q, k) => {
+    const b = k < n;
+    if (q.tri) return poly(q.tri, b ? 'conc fb' : 'gh');
+    const [x0, y0, x1, y1] = q.box;
+    let o = rbox(x0, y0, HF, x1, y1, H, 'conc', b);
+    if (b && q.op) {
+      const at = (a, c) => q.ax === 'x' ? [q.i + a, q.face, HF + c * h] : [q.face, q.i + a, HF + c * h], r = (a0, a1, c0, c1, cl) => poly([at(a0, c0), at(a1, c0), at(a1, c1), at(a0, c1)], cl + (q.ax === 'x' ? ' fa' : ' fb'));
+      o += q.op === 'j' ? r(.2, .8, .33, .85, 'frame') + r(.26, .74, .39, .79, 'glass') : r(.17, .83, 0, .85, 'frame') + r(.23, .77, .02, .81, 'door');
+    }
+    return o;
+  };
+  const dep = q => q.tri ? (q.tri[0][0] + D / 2) : (q.box[0] + q.box[2] + q.box[1] + q.box[3]) / 2;
+  const mk = back => L.map((q, k) => ({ q, k })).filter(x => !!x.q.back === back).sort((a, c) => dep(a.q) - dep(c.q)).map(x => one(x.q, x.k)).join('');
+  return { back: mk(true), front: mk(false) };
+}
+function telhadoR(s) {
+  const n = cnt(RS, s.f, s.st === 'doing'), done = s.st === 'done';
+  const slope = (yE, lit) => {
+    let o = '';
+    for (let k = 0; k < RS; k++) {
+      const t0 = k / RS, t1 = (k + 1) / RS, y0 = yE + t0 * (D / 2 - yE), y1 = yE + t1 * (D / 2 - yE), z0 = ZE + t0 * (ZR - ZE), z1 = ZE + t1 * (ZR - ZE);
+      o += poly([[-OH, y0, z0], [W + OH, y0, z0], [W + OH, y1, z1], [-OH, y1, z1]], k < n ? `roof ${lit ? 'l' : 'd'} s${k % 2}` : 'gh');
+      if (k < n) for (let x = -OH + .55; x < W + OH - .1; x += .55) o += `<path class="tj" d="M${P(x, y0, z0)}L${P(x, y1, z1)}"/>`;
+    }
+    if (done) o += poly([[W + OH, yE, ZE], [W + OH, D / 2, ZR], [W + OH, D / 2, ZR - .14], [W + OH, yE, ZE - .14]], 'redge fb') + (lit ? poly([[-OH, yE, ZE], [W + OH, yE, ZE], [W + OH, yE, ZE - .14], [-OH, yE, ZE - .14]], 'redge fa') : '');
+    return o;
+  };
+  const ridge = done ? `<path class="ridge" d="M${P(-OH, D / 2, ZR)}L${P(W + OH, D / 2, ZR)}"/>` : '';
+  return { back: slope(-OH, false), front: slope(D + OH, true) + ridge };
+}
+function sombra(est) {
+  const f = k => est.find(e => e.k === k).f, alt = (f('fundacao') > 0 ? HF : 0) + f('placas') * (H - HF) + f('telhado') * RISE * .6;
+  if (alt < .05) return '';
+  const dx = alt * .9, dy = alt * .25;
+  return `<polygon class="shadow" filter="url(#hgBlur)" points="${[[0, 0], [W, 0], [W + dx, dy], [W + dx, D + dy], [dx, D + dy], [0, D]].map(q => P(q[0], q[1], .02)).join(' ')}"/>`;
+}
+function svgReal(est, label) {
+  const e = k => est.find(x => x.k === k), t = e('terra'), f = e('fundacao'), p = e('placas'), r = e('telhado');
+  const g = (s, inner) => `<g class="st ${s.st}${s.late ? ' late' : ''}" data-k="${s.k}">${inner}</g>`, pa = paredesR(p), tl = telhadoR(r);
+  return `<svg class="hg-svg real" viewBox="-390 -150 830 560" role="img" aria-label="${C.esc(label)}">
+  <defs><filter id="hgBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5"/></filter><filter id="hgBlur2"><feGaussianBlur stdDeviation="14"/></filter>
+  <linearGradient id="hgGlass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d3efff"/><stop offset=".55" stop-color="#7fb3d6"/><stop offset="1" stop-color="#3d6a8c"/></linearGradient>
+  <radialGradient id="hgLeaf" cx=".4" cy=".35"><stop offset="0" stop-color="#6fae4a"/><stop offset="1" stop-color="#2f6a2c"/></radialGradient></defs>
+  <ellipse cx="29" cy="300" rx="330" ry="70" class="floorsh" filter="url(#hgBlur2)"/>
+  ${chao()}${arvore(-2.2, 1, .95)}${arvore(10, -1.6, 1.05)}
+  ${g(t, terraR(t))}${sombra(est)}${g(f, fundacaoR(f))}${g(p, pa.back)}${g(r, tl.back)}${g(p, pa.front)}${g(r, tl.front)}
+  ${arvore(10.2, 8, 1.1)}${arvore(-2, 7.6, .85)}
+</svg>`;
+}
+
 function svg(est, label) {
   const e = k => est.find(x => x.k === k), t = e('terra'), f = e('fundacao'), p = e('placas'), r = e('telhado');
   const g = (s, inner) => `<g class="st ${s.st}${s.late ? ' late' : ''}" data-k="${s.k}">${inner}</g>`, pl = placas(p), tl = telhado(r);
@@ -127,14 +233,15 @@ function passoRow(p) {
 function view(est, o) {
   const label = 'Desenho esquemático da obra. ' + est.map(s => s.nome + ': ' + resumo(s).toLowerCase()).join('. ') + '.';
   const ps = o.passos || [], por = k => ps.filter(p => faseDe(p) === k), soltos = ps.filter(p => !faseDe(p));
-  return `<div class="hg" id="hgBox"><div class="hg-scan" aria-hidden="true"></div>
-  <div class="hg-top"><div><small>HOLOGRAMA DA OBRA</small><h3>${C.esc(o.titulo)}</h3>${o.sub ? `<p>${C.esc(o.sub)}</p>` : ''}</div><div class="hg-tot"><b>${o.total}%</b><small>concluído</small></div></div>
-  <div class="hg-body"><div class="hg-fig">${svg(est, label)}</div>
+  const real = o.modo !== 'holo';
+  return `<div class="hg${real ? ' real' : ''}" id="hgBox"><div class="hg-scan" aria-hidden="true"></div>
+  <div class="hg-top"><div><small>${real ? 'ANDAMENTO DA OBRA' : 'HOLOGRAMA DA OBRA'}</small><h3>${C.esc(o.titulo)}</h3>${o.sub ? `<p>${C.esc(o.sub)}</p>` : ''}</div><div class="hg-tot"><b>${o.total}%</b><small>concluído</small></div></div>
+  <div class="hg-body"><div class="hg-fig">${real ? svgReal(est, label) : svg(est, label)}</div>
   <ol class="hg-st">${est.map((s, i) => `<li class="${s.st}${s.late ? ' late' : ''}" data-k="${s.k}"><span class="n" aria-hidden="true">${s.st === 'done' ? '✓' : i + 1}</span><div><b>${C.esc(s.nome)}</b><small>${C.esc(resumo(s))}${s.fim && s.st !== 'done' ? ' · prazo ' + C.esc(C.dt(s.fim)) : ''}</small><i class="hg-bar"><u style="width:${Math.round(s.f * 100)}%"></u></i>
     <div class="hg-ps">${por(s.k).map(passoRow).join('')}<button type="button" class="hg-add hg-ed" data-act="pNewF" data-k="${s.k}">+ passo nesta etapa</button></div></div></li>`).join('')}</ol></div>
   ${soltos.length ? `<div class="hg-solto hg-ed"><small>Passos sem etapa no desenho (edite o passo e escolha a etapa)</small>${soltos.map(passoRow).join('')}</div>` : ''}
   <p class="hg-foot">Desenho esquemático e ilustrativo. As proporções não representam o projeto real.</p></div>`;
 }
 
-window.HOLO = { init: ctx => { C = Object.assign(C, ctx); }, FASES, faseDe, estado, svg, view };
+window.HOLO = { init: ctx => { C = Object.assign(C, ctx); }, FASES, faseDe, estado, svg, svgReal, view };
 })();
