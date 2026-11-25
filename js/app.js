@@ -42,6 +42,7 @@ const SCHEMA = {
   obras: { t: 'Obra', f: [
     { k: 'nome', l: 'Nome da obra', full: 1, req: 1 }, { k: 'empId', l: 'Empreendimento', type: 'select', o: refOpt('empreendimentos') },
     { k: 'status', l: 'Status', type: 'select', o: () => opt(['Planejamento', 'Em andamento', 'Pausada', 'Concluída']) },
+    { k: 'tipoObra', l: 'Tipo de obra', type: 'select', o: () => opt(['Padrão', 'Placas']) },
     { k: 'orcamento', l: 'Orçamento (R$)', type: 'number' }, { k: 'gasto', l: 'Gasto até agora (R$)', type: 'number' },
     { k: 'inicio', l: 'Início', type: 'date' }, { k: 'previsao', l: 'Previsão de término', type: 'date' },
     { k: 'resp', l: 'Engenheiro responsável' }, { k: 'endereco', l: 'Endereço' }] },
@@ -79,7 +80,7 @@ const SCHEMA = {
     { k: 'cat', l: 'Categoria (vazio = automática)', type: 'select', o: () => [{ v: '', l: '— automática —' }].concat(opt(FIN.CATS.Receita.concat(FIN.CATS.Despesa))) }] }
 };
 const DEFAULTS = {
-  obras: () => ({ status: 'Planejamento', orcamento: 0, gasto: 0, inicio: todayISO(), previsao: todayISO(), empId: (S.empreendimentos[0] || {}).id || '' }),
+  obras: () => ({ status: 'Planejamento', tipoObra: 'Padrão', orcamento: 0, gasto: 0, inicio: todayISO(), previsao: todayISO(), empId: (S.empreendimentos[0] || {}).id || '' }),
   empreendimentos: () => ({ tipo: 'Condomínio de apartamentos', status: 'Lançamento', unidades: 0, vendidas: 0, reservadas: 0, vgv: 0, entrega: todayISO() }),
   materiais: () => ({ cat: 'Outros', un: 'un', qtd: 0, min: 0, custo: 0, forn: '' }),
   funcionarios: () => ({ status: 'Ativo', obraId: '', salario: 0, adm: todayISO() }),
@@ -327,7 +328,8 @@ const ring = (p, size = 92) => { const r = size / 2 - 7, c = 2 * Math.PI * r, le
 PAGES.andamento = () => {
   const id = curObraId();
   if (!id) return header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.') + '<div class="card empty">Cadastre uma obra primeiro.</div>';
-  const o = by(S.obras, id), tab = state.tab.and || 'Passos', ps = o.passos || [], p = prog(o);
+  const o = by(S.obras, id), ps = o.passos || [], p = prog(o);
+  const tabs = (o.tipoObra === 'Placas' ? ['Holograma'] : []).concat(['Passos', 'Materiais e custos', 'Contratos', 'Cronograma']), tab = tabs.includes(state.tab.and) ? state.tab.and : tabs[0];
   const done = ps.filter(x => x.status === 'Concluído').length, late = ps.filter(passoLate).length;
   const prevT = ps.reduce((s, x) => s + passoCost(x), 0), cts = S.contratos.filter(c => c.obraId === id);
   const cVal = cts.reduce((s, c) => s + c.valor, 0), cPago = cts.reduce((s, c) => s + c.pago, 0), dias = daysTo(o.previsao);
@@ -336,12 +338,15 @@ PAGES.andamento = () => {
     <div class="an-title"><div><h2>${esc(o.nome)}</h2><p>${esc(nm(S.empreendimentos, o.empId))} · ${esc(o.resp || '—')} · ${dt(o.inicio)} → ${dt(o.previsao)}</p></div>${pill(o.status)}</div>
     <div class="an-bar ${p === 100 ? 'ok' : ''}"><i style="width:${p}%"></i></div>
     <div class="an-stats">${stat('Avanço', p + '%', '', `${done} de ${ps.length} passos`)}${stat('Atrasados', late, late ? 'down' : '', late ? 'passo(s) fora do prazo' : 'nenhum')}${stat('Prazo final', dias >= 0 ? dias + ' dias' : -dias + ' dias', dias < 0 ? 'down' : '', dias >= 0 ? 'restantes' : 'de atraso')}${stat('Previsto', brlS(prevT), prevT > o.orcamento ? 'down' : '', 'de ' + brlS(o.orcamento) + ' orçados')}${stat('Contratos', brlS(cVal), '', cts.length + ' · pago ' + brlS(cPago))}</div></div>`;
-  const tabs = ['Passos', 'Materiais e custos', 'Contratos', 'Cronograma'];
   const tb = `<div class="an-tabs"><div class="seg-g" role="tablist">${tabs.map(t => `<button class="seg ${tab === t ? 'on' : ''}" role="tab" aria-selected="${tab === t}" data-act="tab" data-k="and" data-v="${t}">${t}</button>`).join('')}</div>
-    <div class="acts">${tab === 'Passos' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="pCsv">⬇ CSV</button>' : tab === 'Contratos' ? '<button class="btn sm" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost sm" data-act="csv" data-k="contratos">⬇ CSV</button>' : ''}</div></div>`;
-  const body = tab === 'Passos' ? tabPassos(o) : tab === 'Materiais e custos' ? tabMat(o) : tab === 'Contratos' ? tabCont(o, cts) : tabCron(o);
+    <div class="acts">${tab === 'Holograma' ? '<button class="btn ghost sm" data-act="hgFull">⛶ Tela cheia</button>' : tab === 'Passos' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="pCsv">⬇ CSV</button>' : tab === 'Contratos' ? '<button class="btn sm" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost sm" data-act="csv" data-k="contratos">⬇ CSV</button>' : ''}</div></div>`;
+  const body = tab === 'Holograma' ? tabHolo(o) : tab === 'Passos' ? tabPassos(o) : tab === 'Materiais e custos' ? tabMat(o) : tab === 'Contratos' ? tabCont(o, cts) : tabCron(o);
   return header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.') + strip + head + tb + body;
 };
+
+function tabHolo(o) {
+  return HOLO.view(HOLO.estado(o.passos, passoLate), { titulo: o.nome, sub: nm(S.empreendimentos, o.empId) + ' · ' + dt(o.inicio) + ' → ' + dt(o.previsao), total: prog(o) });
+}
 
 function tabPassos(o) {
   const all = o.passos || [], ps = all.map((p, i) => ({ p, i })).filter(x => !state.q || (x.p.nome + ' ' + (x.p.obs || '')).toLowerCase().includes(state.q.toLowerCase()));
@@ -432,7 +437,8 @@ function openPasso(oid, pid) {
   modal(cur ? 'Editar passo' : 'Novo passo', `<form class="form" id="frm">
     <label class="full">Nome do passo<input name="nome" required value="${esc(p.nome)}" placeholder="Ex.: Fundação"></label>
     <label>Situação<select name="status">${['Pendente', 'Em andamento', 'Concluído'].map(s => `<option ${s === p.status ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
-    <label>Peso na barra (importância)<input name="peso" type="number" min="1" step="1" value="${p.peso || 1}"></label>
+    <label>Avanço do passo (%) <small class="mut">só vale em andamento</small><input name="pct" type="number" min="0" max="100" step="5" value="${p.status === 'Em andamento' ? (p.pct || 0) : 0}"></label>
+    <label class="full">Peso na barra (importância)<input name="peso" type="number" min="1" step="1" value="${p.peso || 1}"></label>
     <label>Início previsto<input name="ini" type="date" required value="${p.ini}"></label><label>Prazo (término)<input name="fim" type="date" required value="${p.fim}"></label>
     <label class="full">Mão de obra e serviços previstos (R$)<input name="extra" type="number" min="0" step="any" value="${p.extra || 0}"></label>
     <div class="full"><b class="sm">Materiais necessários neste passo</b><div id="pm" style="margin-top:8px">${(p.mats || []).map(mrow).join('')}</div><button type="button" class="btn ghost sm" id="pmAdd" style="margin-top:6px">+ Adicionar material</button><p class="sm mut" id="pTot" style="margin-top:8px"></p></div>
@@ -447,7 +453,8 @@ function openPasso(oid, pid) {
   $('#frmOk').onclick = () => {
     if (!fm.reportValidity()) return;
     if (fm.elements.fim.value < fm.elements.ini.value) return toast('O prazo não pode ser antes do início');
-    const d = { nome: fm.elements.nome.value.trim(), status: fm.elements.status.value, peso: Math.max(1, parseInt(fm.elements.peso.value) || 1), ini: fm.elements.ini.value, fim: fm.elements.fim.value, extra: parseFloat(fm.elements.extra.value) || 0, obs: fm.elements.obs.value.trim(), mats: rows() };
+    const d = { nome: fm.elements.nome.value.trim(), status: fm.elements.status.value, pct: 0, peso: Math.max(1, parseInt(fm.elements.peso.value) || 1), ini: fm.elements.ini.value, fim: fm.elements.fim.value, extra: parseFloat(fm.elements.extra.value) || 0, obs: fm.elements.obs.value.trim(), mats: rows() };
+    d.pct = d.status === 'Concluído' ? 100 : d.status === 'Pendente' ? 0 : Math.min(100, Math.max(0, parseInt(fm.elements.pct.value) || 0));
     const was = cur ? cur.status : 'Pendente';
     d.dataConc = d.status === 'Concluído' ? (was === 'Concluído' && cur.dataConc ? cur.dataConc : todayISO()) : '';
     if (cur) Object.assign(cur, d); else o.passos.push(Object.assign({ id: uid('s'), baixado: false }, d));
@@ -456,7 +463,7 @@ function openPasso(oid, pid) {
 }
 function togglePasso(o, pid) {
   const p = o.passos.find(x => x.id === pid); if (!p) return;
-  if (p.status === 'Concluído') { p.status = 'Pendente'; p.dataConc = ''; } else { p.status = 'Concluído'; p.dataConc = todayISO(); }
+  if (p.status === 'Concluído') { p.status = 'Pendente'; p.dataConc = ''; p.pct = 0; } else { p.status = 'Concluído'; p.dataConc = todayISO(); p.pct = 100; }
   syncObra(o); save(); render(); toast(p.status === 'Concluído' ? `✅ Passo concluído · obra em ${prog(o)}%` : `Passo reaberto · obra em ${prog(o)}%`);
 }
 function baixarPasso(o, pid) {
@@ -519,6 +526,7 @@ const ACT = {
   pDel: id => { const o = by(S.obras, curObraId()), p = o.passos.find(x => x.id === id); confirmBox(`Excluir o passo <b>${esc(p.nome)}</b>?`, () => { o.passos = o.passos.filter(x => x.id !== id); syncObra(o); save(); render(); toast('Passo excluído'); }); },
   pTpl: () => { const o = by(S.obras, curObraId()); o.passos = mkPassos(o, 0, false); save(); render(); toast('Modelo padrão aplicado: edite os passos como quiser'); },
   pCsv: () => exportPassos(by(S.obras, curObraId())), cPay: id => payContrato(id),
+  hgFull: () => { const el = $('#hgBox'); if (el && el.requestFullscreen) el.requestFullscreen().catch(() => toast('Tela cheia indisponível neste navegador')); else toast('Tela cheia indisponível neste navegador'); },
   csv: (id, b) => exportCSV(b.dataset.k)
 };
 $('#view').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && ACT[b.dataset.act]) { e.stopPropagation(); ACT[b.dataset.act](b.dataset.id, b); } });
@@ -546,6 +554,7 @@ $('#btnReset').onclick = () => confirmBox('Restaurar os dados de exemplo? Todos 
 let theme = 'dark'; try { theme = localStorage.getItem('imperio_theme') || 'dark'; } catch (e) {}
 document.documentElement.dataset.theme = theme;
 $('#btnTheme').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('imperio_theme', theme); } catch (e) {} };
+HOLO.init({ esc, dt });
 FIN.init({ S: () => S, nm, esc, brl, brlS, dt, daysTo, header, pill, table, match, render });
 BI.init({ S: () => S, by, nm, esc, brl, brlS, num, dt, daysTo, prog, isLate, low, pill, COLOR, header, modal, closeModal, toast, render, openObra });
 render();

@@ -13,12 +13,21 @@ const PASSO_TPL = [
   ['Pintura e acabamento final', .10, [['m9', 160]]],
   ['Vistoria, limpeza e entrega', .06, []]
 ];
+// Obras de placas: 4 passos, cada um ligado a uma etapa do holograma (js/holo.js).
+// Sem custos nem materiais pré-preenchidos: não há valor definido, cada passo é editado pelo usuário.
+const PASSO_TPL_PLACAS = [
+  ['Terraplanagem', 0, [], 'terra'],
+  ['Fundação', 0, [], 'fundacao'],
+  ['Levantamento das placas', 0, [], 'placas'],
+  ['Telhado', 0, [], 'telhado']
+];
 // Gera os passos padrão de uma obra, distribuindo as datas entre início e previsão.
 function mkPassos(o, done, inProg) {
-  const t0 = new Date(o.inicio + 'T12:00:00').getTime(), t1 = new Date(o.previsao + 'T12:00:00').getTime(), n = PASSO_TPL.length;
+  const tpl = o.tipoObra === 'Placas' ? PASSO_TPL_PLACAS : PASSO_TPL;
+  const t0 = new Date(o.inicio + 'T12:00:00').getTime(), t1 = new Date(o.previsao + 'T12:00:00').getTime(), n = tpl.length;
   const step = Math.max((t1 - t0) / n, 864e5 * 3), iso = t => new Date(t).toISOString().slice(0, 10);
-  return PASSO_TPL.map((p, i) => ({
-    id: 's' + Math.random().toString(36).slice(2, 9), nome: p[0], ini: iso(t0 + i * step), fim: iso(t0 + (i + 1) * step - 864e5), peso: 1,
+  return tpl.map((p, i) => ({
+    id: 's' + Math.random().toString(36).slice(2, 9), nome: p[0], fase: p[3] || '', pct: 0, ini: iso(t0 + i * step), fim: iso(t0 + (i + 1) * step - 864e5), peso: 1,
     status: i < done ? 'Concluído' : (i === done && inProg ? 'Em andamento' : 'Pendente'), dataConc: i < done ? iso(t0 + (i + 1) * step - 864e5) : '',
     extra: Math.round((o.orcamento || 0) * p[1] * 0.9), mats: p[2].map(m => ({ matId: m[0], qtd: m[1] })), baixado: i < done, obs: ''
   }));
@@ -43,7 +52,8 @@ function seedData() {
       { id: 'o3', nome: 'Villa Imperial - Fase 1', empId: 'e2', status: 'Em andamento', orcamento: 12800000, gasto: 9100000, inicio: off(-280), previsao: off(-12), resp: 'Eng. Juliana Prado', endereco: 'Al. Rio Negro, 800', etapas: etapas(100, 100, 85, 60, 35) },
       { id: 'o4', nome: 'Torre Business - Fundação', empId: 'e3', status: 'Planejamento', orcamento: 21000000, gasto: 380000, inicio: off(25), previsao: off(560), resp: 'Eng. Rafael Torres', endereco: 'Av. Júlio de Mesquita, 500', etapas: etapas(5, 0, 0, 0, 0) },
       { id: 'o5', nome: 'Jardins - Infraestrutura', empId: 'e4', status: 'Concluída', orcamento: 7800000, gasto: 7450000, inicio: off(-700), previsao: off(-60), resp: 'Eng. Juliana Prado', endereco: 'Av. Itavuvu, 3000', etapas: etapas(100, 100, 100, 100, 100) },
-      { id: 'o6', nome: 'Villa Imperial - Clube', empId: 'e2', status: 'Pausada', orcamento: 3200000, gasto: 640000, inicio: off(-90), previsao: off(200), resp: 'Eng. Juliana Prado', endereco: 'Al. Rio Negro, 800', etapas: etapas(100, 30, 0, 0, 0) }
+      { id: 'o6', nome: 'Villa Imperial - Clube', empId: 'e2', status: 'Pausada', orcamento: 3200000, gasto: 640000, inicio: off(-90), previsao: off(200), resp: 'Eng. Juliana Prado', endereco: 'Al. Rio Negro, 800', etapas: etapas(100, 30, 0, 0, 0) },
+      { id: 'o7', nome: 'Villa Imperial - Casas de placas', empId: 'e2', status: 'Em andamento', tipoObra: 'Placas', orcamento: 1800000, gasto: 420000, inicio: off(-45), previsao: off(135), resp: 'Eng. Juliana Prado', endereco: 'Al. Rio Negro, 800' }
     ],
     materiais: [
       { id: 'm1', nome: 'Cimento CP-II 50kg', cat: 'Aglomerantes', un: 'saco', qtd: 1850, min: 800, custo: 36.9, forn: 'f1', local: 'Depósito A' },
@@ -99,8 +109,9 @@ function seedData() {
     ],
     lancamentos: seedLancamentos()
   };
-  const feitos = { o1: [5, 1], o2: [3, 1], o3: [6, 1], o4: [0, 0], o5: [9, 0], o6: [2, 0] };
+  const feitos = { o1: [5, 1], o2: [3, 1], o3: [6, 1], o4: [0, 0], o5: [9, 0], o6: [2, 0], o7: [1, 1] };
   d.obras.forEach(o => { const f = feitos[o.id] || [0, 0]; o.passos = mkPassos(o, f[0], !!f[1]); delete o.etapas; });
+  d.obras.find(o => o.id === 'o7').passos[1].pct = 40; // exemplo: fundação em 40%
   d.contratos = [
     { id: 'c1', obraId: 'o1', nome: 'Empreitada de estrutura - Torre A', empresa: 'Construtora Alicerce Ltda', tipo: 'Empreitada', status: 'Vigente', valor: 4200000, pago: 3100000, inicio: off(-250), fim: off(40), obs: 'Medição mensal' },
     { id: 'c2', obraId: 'o1', nome: 'Fornecimento de concreto usinado', empresa: 'Concreto Forte S.A.', tipo: 'Fornecimento', status: 'Vigente', valor: 2800000, pago: 2400000, inicio: off(-240), fim: off(25), obs: '' },

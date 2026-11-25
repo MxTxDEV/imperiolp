@@ -1,0 +1,50 @@
+/* Holograma do andamento (js/holo.js). Painel sempre escuro, nos dois temas, para o brilho funcionar. */
+.hg{--hg:#43d9ff;position:relative;overflow:hidden;color:#e8edf7;border:1px solid rgba(67,217,255,.28);border-radius:var(--r,16px);padding:20px 22px 14px;
+  background:radial-gradient(120% 90% at 30% 20%,#0d2236 0%,#07101c 55%,#050a13 100%);box-shadow:0 0 0 1px rgba(67,217,255,.06) inset,0 18px 44px rgba(0,0,0,.35)}
+.hg:fullscreen{overflow:auto;border-radius:0;padding:32px 40px}
+.hg-scan{position:absolute;left:0;right:0;top:0;height:90px;pointer-events:none;background:linear-gradient(180deg,rgba(67,217,255,0),rgba(67,217,255,.09) 55%,rgba(67,217,255,0));animation:hgscan 7s linear infinite}
+.hg-top{position:relative;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.hg-top small{display:block;font-size:.66rem;letter-spacing:.16em;color:var(--hg);opacity:.85}
+.hg-top h3{font-family:Sora,Inter,sans-serif;font-size:1.15rem;margin:4px 0 2px;color:#fff}
+.hg-top p{font-size:.78rem;color:#8fa6c4}
+.hg-tot{text-align:right;flex:none}
+.hg-tot b{display:block;font-family:Sora,Inter,sans-serif;font-size:2.1rem;line-height:1;color:var(--hg);text-shadow:0 0 18px rgba(67,217,255,.55)}
+.hg-tot small{letter-spacing:.08em;text-transform:uppercase}
+.hg-body{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:18px;align-items:center;margin-top:6px}
+.hg-fig{min-width:0}
+.hg-svg{display:block;width:100%;height:auto;max-height:560px;overflow:visible}
+.hg-svg .glow{filter:drop-shadow(0 0 5px rgba(67,217,255,.5))}
+.hg-svg .ring{fill:none;stroke:var(--hg);stroke-opacity:.35;stroke-dasharray:2 7;stroke-width:1.2}
+.hg-svg .ring.r2{stroke-opacity:.18;stroke-dasharray:none}
+.hg-svg polygon{stroke-width:1.2;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.hg-svg .b{fill:var(--hg);fill-opacity:.17;stroke:var(--hg);stroke-opacity:.95}
+.hg-svg .b.t{fill-opacity:.34}
+.hg-svg .g{fill:none;stroke:var(--hg);stroke-opacity:.32;stroke-dasharray:3 3}
+.hg-svg .fl.b{fill-opacity:.09;stroke-opacity:.5}
+.hg-svg .fl.g{stroke-opacity:.14;stroke-dasharray:none}
+.hg-svg .w{fill:#9ff0ff;fill-opacity:.38;stroke:#c9f8ff;stroke-opacity:.9;stroke-dasharray:none}
+.hg-svg .st.doing .g{stroke:#f1cf84;stroke-opacity:.85;animation:hgp 1.8s ease-in-out infinite}
+.hg-svg .st.doing .fl.g{stroke-opacity:.34;animation:none}
+.hg-svg .st.late .g{stroke:#ff5d6c;stroke-opacity:.9}
+.hg-svg .st.late .fl.g{stroke-opacity:.4}
+.hg-st{list-style:none;display:flex;flex-direction:column;gap:10px;margin:0;padding:0}
+.hg-st li{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1px solid rgba(67,217,255,.16);border-radius:12px;background:rgba(67,217,255,.04)}
+.hg-st li.doing{border-color:rgba(241,207,132,.5);background:rgba(241,207,132,.06)}
+.hg-st li.late{border-color:rgba(255,93,108,.55);background:rgba(255,93,108,.07)}
+.hg-st li.done{border-color:rgba(67,217,255,.4)}
+.hg-st .n{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.8rem;border:1.5px solid rgba(67,217,255,.45);color:var(--hg)}
+.hg-st li.done .n{background:var(--hg);color:#04202b;border-color:var(--hg)}
+.hg-st li.doing .n{border-color:#f1cf84;color:#f1cf84}
+.hg-st li.late .n{border-color:#ff5d6c;color:#ff5d6c}
+.hg-st li>div{min-width:0;flex:1}
+.hg-st b{display:block;font-size:.88rem;color:#fff}
+.hg-st small{display:block;font-size:.74rem;color:#8fa6c4;margin-top:1px}
+.hg-bar{display:block;height:5px;border-radius:99px;background:rgba(67,217,255,.12);margin-top:8px;overflow:hidden}
+.hg-bar u{display:block;height:100%;border-radius:99px;text-decoration:none;background:var(--hg);box-shadow:0 0 8px rgba(67,217,255,.6);transition:width .5s}
+.hg-st li.doing .hg-bar u{background:#f1cf84;box-shadow:0 0 8px rgba(241,207,132,.6)}
+.hg-st li.late .hg-bar u{background:#ff5d6c;box-shadow:0 0 8px rgba(255,93,108,.6)}
+.hg-foot{position:relative;margin-top:8px;font-size:.68rem;color:#6e84a3;text-align:center}
+@keyframes hgscan{from{transform:translateY(-100px)}to{transform:translateY(560px)}}
+@keyframes hgp{0%,100%{stroke-opacity:.35}50%{stroke-opacity:1}}
+@media(max-width:900px){.hg-body{grid-template-columns:1fr}.hg{padding:16px 14px 12px}}
+@media(prefers-reduced-motion:reduce){.hg-scan{display:none}.hg-svg .st.doing .g{animation:none}.hg-bar u{transition:none}}
