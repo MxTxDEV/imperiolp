@@ -345,11 +345,19 @@ PAGES.andamento = () => {
   return header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.') + strip + head + tb + body;
 };
 
-const holoDados = o => [HOLO.estado(o.passos, passoLate), { titulo: o.nome, sub: nm(S.empreendimentos, o.empId) + ' · ' + dt(o.inicio) + ' → ' + dt(o.previsao), total: prog(o), passos: o.passos || [], planta: o.planta || 'Retangular' }];
+const hgS = () => (state.hg = state.hg || { rot: 0, z: 1, x: 0, y: 0 });
+// zoom e deslocamento mexem só no viewBox do desenho; o giro refaz o desenho
+function aplicarHg() {
+  const sv = $('.hg-svg'); if (!sv) return;
+  const g = hgS(), [bx, by, bw, bh] = sv.dataset.vb.split(' ').map(Number), w = bw / g.z, h = bh / g.z, mx = (bw - w) / 2 + bw * .08, my = (bh - h) / 2 + bh * .08;
+  g.x = Math.max(-mx, Math.min(mx, g.x)); g.y = Math.max(-my, Math.min(my, g.y));
+  sv.setAttribute('viewBox', `${bx + bw / 2 + g.x - w / 2} ${by + bh / 2 + g.y - h / 2} ${w} ${h}`); sv.classList.toggle('zoomed', g.z > 1);
+}
+const holoDados = o => [HOLO.estado(o.passos, passoLate), { titulo: o.nome, sub: nm(S.empreendimentos, o.empId) + ' · ' + dt(o.inicio) + ' → ' + dt(o.previsao), total: prog(o), passos: o.passos || [], planta: o.planta || 'Retangular', rot: hgS().rot }];
 function tabHolo(o) { return HOLO.view(...holoDados(o)); }
 // na tela cheia o painel é atualizado por dentro: trocar o elemento faria a tela cheia fechar
 const emTelaCheia = () => !!(document.fullscreenElement && document.fullscreenElement.id === 'hgBox');
-function atualizar(o) { if (emTelaCheia()) $('#hgBox').innerHTML = HOLO.inner(...holoDados(o)); else render(); }
+function atualizar(o) { if (emTelaCheia()) { $('#hgBox').innerHTML = HOLO.inner(...holoDados(o)); aplicarHg(); } else render(); }
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) render(); });
 
 function tabPassos(o) {
@@ -520,6 +528,7 @@ function render() {
   $('#nav').innerHTML = NAV.map(([k, i, l]) => `<a href="#/${k}" class="${k === r ? 'on' : ''}" title="${l}"${k === r ? ' aria-current="page"' : ''}><i>${i}</i><span class="lbl">${l}</span>${k === 'estoque' && S.materiais.some(low) ? `<em>${S.materiais.filter(low).length}</em>` : ''}${k === 'tarefas' && S.tarefas.some(t => t.status !== 'Resolvida') ? `<em style="background:var(--blue)">${S.tarefas.filter(t => t.status !== 'Resolvida').length}</em>` : ''}</a>`).join('');
   $('#view').innerHTML = PAGES[r]();
   const n = alerts().length; $('#bellN').textContent = n; $('#bellN').style.display = n ? '' : 'none';
+  aplicarHg();
   document.title = 'Império ERP | ' + (NAV.find(x => x[0] === r) || [])[2];
 }
 window.addEventListener('hashchange', () => { state.q = ''; $('#q').value = ''; $('#side').classList.remove('open'); render(); window.scrollTo(0, 0); });
@@ -538,6 +547,9 @@ const ACT = {
   pToggle: id => togglePasso(by(S.obras, curObraId()), id), pBaixa: id => baixarPasso(by(S.obras, curObraId()), id),
   pUp: id => movePasso(by(S.obras, curObraId()), id, -1), pDown: id => movePasso(by(S.obras, curObraId()), id, 1),
   pDel: id => { const o = by(S.obras, curObraId()), p = o.passos.find(x => x.id === id); confirmBox(`Excluir o passo <b>${esc(p.nome)}</b>?`, () => { o.passos = o.passos.filter(x => x.id !== id); syncObra(o); save(); render(); toast('Passo excluído'); }); },
+  hgRot: (id, b) => { const g = hgS(); g.rot = (g.rot + (+b.dataset.d) + 4) % 4; atualizar(by(S.obras, curObraId())); },
+  hgZoom: (id, b) => { const g = hgS(); g.z = Math.max(1, Math.min(4, g.z * (+b.dataset.d > 0 ? 1.3 : 1 / 1.3))); if (g.z === 1) g.x = g.y = 0; aplicarHg(); },
+  hgReset: () => { Object.assign(hgS(), { z: 1, x: 0, y: 0 }); aplicarHg(); },
   pNewF: (id, b) => openPasso(curObraId(), null, b.dataset.k), hgDone: id => togglePasso(by(S.obras, curObraId()), id),
   pTpl: () => { const o = by(S.obras, curObraId()); o.passos = mkPassos(o, 0, false); save(); render(); toast('Modelo padrão aplicado: edite os passos como quiser'); },
   pCsv: () => exportPassos(by(S.obras, curObraId())), cPay: id => payContrato(id),
@@ -546,6 +558,18 @@ const ACT = {
 };
 $('#view').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && ACT[b.dataset.act]) { e.stopPropagation(); ACT[b.dataset.act](b.dataset.id, b); } });
 $('#view').addEventListener('keydown', e => { const b = e.target.closest('[role=button][data-act]'); if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); b.click(); } });
+// roda do mouse e pinça aproximam; arrastar desloca (com zoom) ou gira a casa (sem zoom)
+$('#view').addEventListener('wheel', e => { if (!e.target.closest('.hg-svg')) return; e.preventDefault(); const g = hgS(); g.z = Math.max(1, Math.min(4, g.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12))); if (g.z === 1) g.x = g.y = 0; aplicarHg(); }, { passive: false });
+const ptrs = new Map(); let acum = 0, d0 = 0;
+$('#view').addEventListener('pointerdown', e => { if (!e.target.closest('.hg-svg')) return; ptrs.set(e.pointerId, [e.clientX, e.clientY]); acum = 0; d0 = 0; });
+window.addEventListener('pointermove', e => {
+  const q = ptrs.get(e.pointerId); if (!q) return; const g = hgS(), sv = $('.hg-svg'); if (!sv) return;
+  const dx = e.clientX - q[0], dy = e.clientY - q[1]; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size >= 2) { const [p1, p2] = [...ptrs.values()], d = Math.hypot(p1[0] - p2[0], p1[1] - p2[1]); if (d0) { g.z = Math.max(1, Math.min(4, g.z * d / d0)); if (g.z === 1) g.x = g.y = 0; aplicarHg(); } d0 = d; return; }
+  if (g.z > 1) { const k = (sv.dataset.vb.split(' ')[2] / g.z) / sv.getBoundingClientRect().width; g.x -= dx * k; g.y -= dy * k; aplicarHg(); }
+  else { acum += dx; if (Math.abs(acum) >= 70) { g.rot = (g.rot + (acum > 0 ? 1 : -1) + 4) % 4; acum = 0; atualizar(by(S.obras, curObraId())); } }
+});
+['pointerup', 'pointercancel'].forEach(t => window.addEventListener(t, e => { ptrs.delete(e.pointerId); d0 = 0; }));
 $('#view').addEventListener('input', e => { const r = e.target.closest('[data-hgpct]'); if (r && r.nextElementSibling) r.nextElementSibling.textContent = r.value + '%'; });
 $('#view').addEventListener('change', e => { const r = e.target.closest('[data-hgpct]'); if (r) setPct(by(S.obras, curObraId()), r.dataset.hgpct, parseInt(r.value) || 0); });
 $('#view').addEventListener('change', e => { const s = e.target.closest('[data-sel]'); if (s) { state.f[s.dataset.sel] = s.value; render(); } });

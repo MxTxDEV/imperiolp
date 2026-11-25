@@ -10,8 +10,12 @@
 .hg-tot b{display:block;font-family:Sora,Inter,sans-serif;font-size:2.1rem;line-height:1;color:var(--hg);text-shadow:0 0 18px rgba(67,217,255,.55)}
 .hg-tot small{letter-spacing:.08em;text-transform:uppercase}
 .hg-body{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:18px;align-items:center;margin-top:6px}
-.hg-fig{min-width:0}
-.hg-svg{display:block;width:100%;height:auto;max-height:600px;overflow:visible}
+.hg-fig{min-width:0;position:relative}
+.hg-ctl{position:absolute;left:6px;top:6px;display:flex;gap:6px;z-index:2}
+.hg-ctl button{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(10,20,32,.65);color:#e8edf7;font-size:1.05rem;cursor:pointer;line-height:1;backdrop-filter:blur(4px)}
+.hg-ctl button:hover{background:rgba(67,217,255,.22);border-color:var(--hg)}
+.hg-svg{display:block;width:100%;height:auto;max-height:600px;overflow:hidden;cursor:grab;touch-action:pan-y;user-select:none}
+.hg-svg.zoomed{touch-action:none}.hg-svg:active{cursor:grabbing}
 .hg-svg .st{transition:opacity .25s}
 .hg-svg polygon{stroke:rgba(45,35,25,.45);stroke-width:.8;stroke-linejoin:round}
 .hg-svg .floorsh{fill:#000;opacity:.3}

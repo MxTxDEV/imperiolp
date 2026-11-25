@@ -39,12 +39,16 @@ const FORMAS = {
 };
 const H = 2.6, HF = .25, WF = .4, T = .18, OH = .5, RP = .55, GR = .5, S = 34, K = Math.sqrt(3) / 2;
 
-function forma(nome) {
-  const V = FORMAS[nome] || FORMAS.Retangular, n = V.length, E = [];
-  for (let i = 0; i < n; i++) {
-    const a = V[i], b = V[(i + 1) % n], c = V[(i + 2) % n], d = [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])], d2 = [Math.sign(c[0] - b[0]), Math.sign(c[1] - b[1])];
-    E.push({ a, b, d, len: Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]), reflex: d[0] * d2[1] - d[1] * d2[0] < 0 });
-  }
+const arestas = V => V.map((a, i) => {
+  const b = V[(i + 1) % V.length], c = V[(i + 2) % V.length], d = [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])], d2 = [Math.sign(c[0] - b[0]), Math.sign(c[1] - b[1])];
+  return { a, b, d, len: Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]), reflex: d[0] * d2[1] - d[1] * d2[0] < 0 };
+});
+const portaDe = E => E.filter(e => e.d[0] === -1).sort((p, q) => q.a[1] - p.a[1] || q.len - p.len)[0];
+// rot = quantos quartos de volta a casa girou (a porta e as árvores giram junto)
+function forma(nome, rot) {
+  const V0 = FORMAS[nome] || FORMAS.Retangular, k = ((rot || 0) % 4 + 4) % 4, rotP = p => { let x = p[0], y = p[1]; for (let i = 0; i < k; i++) { const t = x; x = -y; y = t; } return [x, y]; };
+  const R0 = V0.map(rotP), sx = -Math.min(...R0.map(v => v[0])), sy = -Math.min(...R0.map(v => v[1])), tr = p => { const r = rotP(p); return [r[0] + sx, r[1] + sy]; };
+  const V = R0.map(v => [v[0] + sx, v[1] + sy]), n = V.length, E = arestas(V), E0 = arestas(V0), b0 = { x0: Math.min(...V0.map(v => v[0])), x1: Math.max(...V0.map(v => v[0])), y0: Math.min(...V0.map(v => v[1])), y1: Math.max(...V0.map(v => v[1])) };
   const xs = V.map(v => v[0]), ys = V.map(v => v[1]), bb = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
   const inside = (x, y) => { let c = false; for (let i = 0; i < n; i++) { const a = V[i], b = V[(i + 1) % n]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
   // distância (norma do máximo) até a parede mais próxima: dá o telhado de quatro águas em qualquer planta ortogonal
@@ -60,7 +64,7 @@ function forma(nome) {
   const sd = (x, y) => inside(x, y) ? dist(x, y) : -dist(x, y);
   let dmax = 0;
   for (let x = bb.x0; x <= bb.x1; x += .5) for (let y = bb.y0; y <= bb.y1; y += .5) dmax = Math.max(dmax, sd(x, y));
-  return { V, E, bb, sd, dmax, door: E.filter(e => e.d[0] === -1).sort((p, q) => q.a[1] - p.a[1] || q.len - p.len)[0] };
+  return { V, E, bb, sd, dmax, door: E[E0.indexOf(portaDe(E0))], tr, b0 };
 }
 
 /* ---------- geometria isométrica ---------- */
@@ -186,22 +190,26 @@ function sombra(est, F) {
   return `<g class="shadow" filter="url(#hgBlur)">${o}</g>`;
 }
 
-function svg(est, label, planta) {
-  const F = forma(planta), e = k => est.find(x => x.k === k), t = e('terra'), f = e('fundacao'), p = e('placas'), r = e('telhado'), g = (s, inner) => `<g class="st ${s.st}${s.late ? ' late' : ''}" data-k="${s.k}">${inner}</g>`;
-  const c = chao(F), b = F.bb, zT = H + RP * F.dmax;
+function svg(est, label, planta, rot) {
+  const F = forma(planta, rot), e = k => est.find(x => x.k === k), t = e('terra'), f = e('fundacao'), p = e('placas'), r = e('telhado'), g = (s, inner) => `<g class="st ${s.st}${s.late ? ' late' : ''}" data-k="${s.k}">${inner}</g>`;
+  const c = chao(F), b = F.b0, zT = H + RP * F.dmax;
+  // as quatro árvores nos cantos do terreno; as duas mais ao fundo saem antes da casa, as duas da frente depois
+  const T4 = [[b.x0 - 2.2, b.y0 + .8, .95], [b.x1 + 2.2, b.y0 - 1.6, 1.05], [b.x1 + 2.4, b.y1 + 2.2, 1.1], [b.x0 - 2, b.y1 + 1.8, .85]].map(q => { const w = F.tr([q[0], q[1]]); return [w[0], w[1], q[2]]; }).sort((p, q) => (p[0] + p[1]) - (q[0] + q[1]));
   // enquadramento sob medida para a planta
   const X = [], Y = [];
   [[c.x0, c.y1, c.z], [c.x1, c.y1, c.z], [c.x1, c.y0, c.z], [c.x0, c.y0, 0], [c.x1, c.y1, c.z], [c.x0, c.y0, c.z]].forEach(q => { const w = pt(...q); X.push(w[0]); Y.push(w[1]); });
   F.V.forEach(v => { Y.push(pt(v[0], v[1], zT)[1] - 36); });
+  T4.forEach(q => { Y.push(pt(q[0], q[1], 2.05 * q[2])[1] - 36 * q[2]); });
   const x0 = Math.min(...X) - 24, x1 = Math.max(...X) + 24, y0 = Math.min(...Y) - 30, y1 = Math.max(...Y) + 40, cx = (x0 + x1) / 2;
-  return `<svg class="hg-svg" viewBox="${x0.toFixed(0)} ${y0.toFixed(0)} ${(x1 - x0).toFixed(0)} ${(y1 - y0).toFixed(0)}" role="img" aria-label="${C.esc(label)}">
+  const vb = `${x0.toFixed(0)} ${y0.toFixed(0)} ${(x1 - x0).toFixed(0)} ${(y1 - y0).toFixed(0)}`;
+  return `<svg class="hg-svg" viewBox="${vb}" data-vb="${vb}" role="img" aria-label="${C.esc(label)}">
   <defs><filter id="hgBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5"/></filter><filter id="hgBlur2" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="14"/></filter>
   <linearGradient id="hgGlass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d3efff"/><stop offset=".55" stop-color="#7fb3d6"/><stop offset="1" stop-color="#3d6a8c"/></linearGradient>
   <radialGradient id="hgLeaf" cx=".4" cy=".35"><stop offset="0" stop-color="#6fae4a"/><stop offset="1" stop-color="#2f6a2c"/></radialGradient></defs>
   <ellipse cx="${cx.toFixed(0)}" cy="${(y1 - 70).toFixed(0)}" rx="${((x1 - x0) * .38).toFixed(0)}" ry="70" class="floorsh" filter="url(#hgBlur2)"/>
-  ${c.o}${arvore(b.x0 - 2.2, b.y0 + .8, .95)}${arvore(b.x1 + 2.2, b.y0 - 1.6, 1.05)}
+  ${c.o}${arvore(...T4[0])}${arvore(...T4[1])}
   ${g(t, terra(t, F))}${sombra(est, F)}${g(f, fundacao(f, F))}${g(p, paredes(p, F))}${g(r, telhado(r, F))}
-  ${arvore(b.x1 + 2.4, b.y1 + 2.2, 1.1)}${arvore(b.x0 - 2, b.y1 + 1.8, .85)}
+  ${arvore(...T4[2])}${arvore(...T4[3])}
 </svg>`;
 }
 
@@ -222,7 +230,7 @@ function inner(est, o) {
   const label = 'Desenho esquemático da obra. ' + est.map(s => s.nome + ': ' + resumo(s).toLowerCase()).join('. ') + '.';
   const ps = o.passos || [], por = k => ps.filter(p => faseDe(p) === k), soltos = ps.filter(p => !faseDe(p));
   return `<div class="hg-top"><div><small>ANDAMENTO DA OBRA</small><h3>${C.esc(o.titulo)}</h3>${o.sub ? `<p>${C.esc(o.sub)}</p>` : ''}</div><div class="hg-tot"><b>${o.total}%</b><small>concluído</small></div></div>
-  <div class="hg-body"><div class="hg-fig">${svg(est, label, o.planta)}</div>
+  <div class="hg-body"><div class="hg-fig">${svg(est, label, o.planta, o.rot)}<div class="hg-ctl" role="group" aria-label="Girar e aproximar"><button type="button" data-act="hgRot" data-d="-1" title="Girar para a esquerda" aria-label="Girar para a esquerda">⟲</button><button type="button" data-act="hgRot" data-d="1" title="Girar para a direita" aria-label="Girar para a direita">⟳</button><button type="button" data-act="hgZoom" data-d="1" title="Aproximar" aria-label="Aproximar">＋</button><button type="button" data-act="hgZoom" data-d="-1" title="Afastar" aria-label="Afastar">－</button><button type="button" data-act="hgReset" title="Voltar à visão inicial" aria-label="Voltar à visão inicial">⌂</button></div></div>
   <ol class="hg-st">${est.map((s, i) => `<li class="${s.st}${s.late ? ' late' : ''}" data-k="${s.k}"><span class="n" aria-hidden="true">${s.st === 'done' ? '✓' : i + 1}</span><div><b>${C.esc(s.nome)}</b><small>${C.esc(resumo(s))}${s.fim && s.st !== 'done' ? ' · prazo ' + C.esc(C.dt(s.fim)) : ''}</small><i class="hg-bar"><u style="width:${Math.round(s.f * 100)}%"></u></i>
     <div class="hg-ps">${por(s.k).map(passoRow).join('')}<button type="button" class="hg-add hg-ed" data-act="pNewF" data-k="${s.k}">+ passo nesta etapa</button></div></div></li>`).join('')}</ol></div>
   ${soltos.length ? `<div class="hg-solto hg-ed"><small>Passos sem etapa no desenho (edite o passo e escolha a etapa)</small>${soltos.map(passoRow).join('')}</div>` : ''}
