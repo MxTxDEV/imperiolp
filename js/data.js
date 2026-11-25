@@ -53,7 +53,7 @@ function seedData() {
       { id: 'o4', nome: 'Torre Business - Fundação', empId: 'e3', status: 'Planejamento', orcamento: 21000000, gasto: 380000, inicio: off(25), previsao: off(560), resp: 'Eng. Rafael Torres', endereco: 'Av. Júlio de Mesquita, 500', etapas: etapas(5, 0, 0, 0, 0) },
       { id: 'o5', nome: 'Jardins - Infraestrutura', empId: 'e4', status: 'Concluída', orcamento: 7800000, gasto: 7450000, inicio: off(-700), previsao: off(-60), resp: 'Eng. Juliana Prado', endereco: 'Av. Itavuvu, 3000', etapas: etapas(100, 100, 100, 100, 100) },
       { id: 'o6', nome: 'Villa Imperial - Clube', empId: 'e2', status: 'Pausada', orcamento: 3200000, gasto: 640000, inicio: off(-90), previsao: off(200), resp: 'Eng. Juliana Prado', endereco: 'Al. Rio Negro, 800', etapas: etapas(100, 30, 0, 0, 0) },
-      { id: 'o7', nome: 'Villa Imperial - Casas de placas', empId: 'e2', status: 'Em andamento', tipoObra: 'Placas', orcamento: 1800000, gasto: 420000, inicio: off(-45), previsao: off(135), resp: 'Eng. Juliana Prado', endereco: 'Al. Rio Negro, 800' }
+      { id: 'o7', nome: 'Villa Imperial - Casas de placas', empId: 'e2', status: 'Em andamento', tipoObra: 'Placas', planta: 'Em L', orcamento: 1800000, gasto: 420000, inicio: off(-45), previsao: off(135), resp: 'Eng. Juliana Prado', endereco: 'Al. Rio Negro, 800' }
     ],
     materiais: [
       { id: 'm1', nome: 'Cimento CP-II 50kg', cat: 'Aglomerantes', un: 'saco', qtd: 1850, min: 800, custo: 36.9, forn: 'f1', local: 'Depósito A' },

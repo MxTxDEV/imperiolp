@@ -43,6 +43,7 @@ const SCHEMA = {
     { k: 'nome', l: 'Nome da obra', full: 1, req: 1 }, { k: 'empId', l: 'Empreendimento', type: 'select', o: refOpt('empreendimentos') },
     { k: 'status', l: 'Status', type: 'select', o: () => opt(['Planejamento', 'Em andamento', 'Pausada', 'Concluída']) },
     { k: 'tipoObra', l: 'Tipo de obra', type: 'select', o: () => opt(['Padrão', 'Placas']) },
+    { k: 'planta', l: 'Formato da planta (obras de placas)', type: 'select', o: () => opt(['Retangular', 'Quadrada', 'Em L', 'Em U']) },
     { k: 'orcamento', l: 'Orçamento (R$)', type: 'number' }, { k: 'gasto', l: 'Gasto até agora (R$)', type: 'number' },
     { k: 'inicio', l: 'Início', type: 'date' }, { k: 'previsao', l: 'Previsão de término', type: 'date' },
     { k: 'resp', l: 'Engenheiro responsável' }, { k: 'endereco', l: 'Endereço' }] },
@@ -80,7 +81,7 @@ const SCHEMA = {
     { k: 'cat', l: 'Categoria (vazio = automática)', type: 'select', o: () => [{ v: '', l: '— automática —' }].concat(opt(FIN.CATS.Receita.concat(FIN.CATS.Despesa))) }] }
 };
 const DEFAULTS = {
-  obras: () => ({ status: 'Planejamento', tipoObra: 'Padrão', orcamento: 0, gasto: 0, inicio: todayISO(), previsao: todayISO(), empId: (S.empreendimentos[0] || {}).id || '' }),
+  obras: () => ({ status: 'Planejamento', tipoObra: 'Padrão', planta: 'Retangular', orcamento: 0, gasto: 0, inicio: todayISO(), previsao: todayISO(), empId: (S.empreendimentos[0] || {}).id || '' }),
   empreendimentos: () => ({ tipo: 'Condomínio de apartamentos', status: 'Lançamento', unidades: 0, vendidas: 0, reservadas: 0, vgv: 0, entrega: todayISO() }),
   materiais: () => ({ cat: 'Outros', un: 'un', qtd: 0, min: 0, custo: 0, forn: '' }),
   funcionarios: () => ({ status: 'Ativo', obraId: '', salario: 0, adm: todayISO() }),
@@ -339,15 +340,17 @@ PAGES.andamento = () => {
     <div class="an-bar ${p === 100 ? 'ok' : ''}"><i style="width:${p}%"></i></div>
     <div class="an-stats">${stat('Avanço', p + '%', '', `${done} de ${ps.length} passos`)}${stat('Atrasados', late, late ? 'down' : '', late ? 'passo(s) fora do prazo' : 'nenhum')}${stat('Prazo final', dias >= 0 ? dias + ' dias' : -dias + ' dias', dias < 0 ? 'down' : '', dias >= 0 ? 'restantes' : 'de atraso')}${stat('Previsto', brlS(prevT), prevT > o.orcamento ? 'down' : '', 'de ' + brlS(o.orcamento) + ' orçados')}${stat('Contratos', brlS(cVal), '', cts.length + ' · pago ' + brlS(cPago))}</div></div>`;
   const tb = `<div class="an-tabs"><div class="seg-g" role="tablist">${tabs.map(t => `<button class="seg ${tab === t ? 'on' : ''}" role="tab" aria-selected="${tab === t}" data-act="tab" data-k="and" data-v="${t}">${t}</button>`).join('')}</div>
-    <div class="acts">${tab === 'Holograma' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="hgModo">' + (hgModo() === 'real' ? '🔷 Ver como holograma' : '🏠 Ver realista') + '</button><button class="btn ghost sm" data-act="hgFull">⛶ Tela cheia</button>' : tab === 'Passos' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="pCsv">⬇ CSV</button>' : tab === 'Contratos' ? '<button class="btn sm" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost sm" data-act="csv" data-k="contratos">⬇ CSV</button>' : ''}</div></div>`;
+    <div class="acts">${tab === 'Holograma' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="hgFull">⛶ Tela cheia</button>' : tab === 'Passos' ? '<button class="btn sm" data-act="pNew">+ Novo passo</button><button class="btn ghost sm" data-act="pCsv">⬇ CSV</button>' : tab === 'Contratos' ? '<button class="btn sm" data-act="new" data-k="contratos">+ Novo contrato</button><button class="btn ghost sm" data-act="csv" data-k="contratos">⬇ CSV</button>' : ''}</div></div>`;
   const body = tab === 'Holograma' ? tabHolo(o) : tab === 'Passos' ? tabPassos(o) : tab === 'Materiais e custos' ? tabMat(o) : tab === 'Contratos' ? tabCont(o, cts) : tabCron(o);
   return header('Andamento das Obras', 'Passos, prazos, materiais, custos e contratos de cada obra.') + strip + head + tb + body;
 };
 
-const hgModo = () => { try { return localStorage.getItem('imperio_hg_modo') || 'real'; } catch (e) { return 'real'; } };
-function tabHolo(o) {
-  return HOLO.view(HOLO.estado(o.passos, passoLate), { titulo: o.nome, sub: nm(S.empreendimentos, o.empId) + ' · ' + dt(o.inicio) + ' → ' + dt(o.previsao), total: prog(o), passos: o.passos || [], modo: hgModo() });
-}
+const holoDados = o => [HOLO.estado(o.passos, passoLate), { titulo: o.nome, sub: nm(S.empreendimentos, o.empId) + ' · ' + dt(o.inicio) + ' → ' + dt(o.previsao), total: prog(o), passos: o.passos || [], planta: o.planta || 'Retangular' }];
+function tabHolo(o) { return HOLO.view(...holoDados(o)); }
+// na tela cheia o painel é atualizado por dentro: trocar o elemento faria a tela cheia fechar
+const emTelaCheia = () => !!(document.fullscreenElement && document.fullscreenElement.id === 'hgBox');
+function atualizar(o) { if (emTelaCheia()) $('#hgBox').innerHTML = HOLO.inner(...holoDados(o)); else render(); }
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) render(); });
 
 function tabPassos(o) {
   const all = o.passos || [], ps = all.map((p, i) => ({ p, i })).filter(x => !state.q || (x.p.nome + ' ' + (x.p.obs || '')).toLowerCase().includes(state.q.toLowerCase()));
@@ -467,7 +470,7 @@ function openPasso(oid, pid, fase0) {
 function togglePasso(o, pid) {
   const p = o.passos.find(x => x.id === pid); if (!p) return;
   if (p.status === 'Concluído') { p.status = 'Pendente'; p.dataConc = ''; p.pct = 0; } else { p.status = 'Concluído'; p.dataConc = todayISO(); p.pct = 100; }
-  syncObra(o); save(); render(); toast(p.status === 'Concluído' ? `✅ Passo concluído · obra em ${prog(o)}%` : `Passo reaberto · obra em ${prog(o)}%`);
+  syncObra(o); save(); atualizar(o); toast(p.status === 'Concluído' ? `✅ Passo concluído · obra em ${prog(o)}%` : `Passo reaberto · obra em ${prog(o)}%`);
 }
 // avanço pelo holograma: 0 = pendente, 100 = concluído, no meio = em andamento
 function setPct(o, pid, v) {
@@ -475,7 +478,7 @@ function setPct(o, pid, v) {
   v = Math.min(100, Math.max(0, v)); const was = p.status;
   p.pct = v; p.status = v >= 100 ? 'Concluído' : v > 0 ? 'Em andamento' : 'Pendente';
   p.dataConc = p.status === 'Concluído' ? (was === 'Concluído' && p.dataConc ? p.dataConc : todayISO()) : '';
-  syncObra(o); save(); render(); toast(p.nome + ': ' + v + '% · obra em ' + prog(o) + '%');
+  syncObra(o); save(); atualizar(o); toast(p.nome + ': ' + v + '% · obra em ' + prog(o) + '%');
 }
 function baixarPasso(o, pid) {
   const p = o.passos.find(x => x.id === pid), falta = [];
@@ -535,7 +538,6 @@ const ACT = {
   pToggle: id => togglePasso(by(S.obras, curObraId()), id), pBaixa: id => baixarPasso(by(S.obras, curObraId()), id),
   pUp: id => movePasso(by(S.obras, curObraId()), id, -1), pDown: id => movePasso(by(S.obras, curObraId()), id, 1),
   pDel: id => { const o = by(S.obras, curObraId()), p = o.passos.find(x => x.id === id); confirmBox(`Excluir o passo <b>${esc(p.nome)}</b>?`, () => { o.passos = o.passos.filter(x => x.id !== id); syncObra(o); save(); render(); toast('Passo excluído'); }); },
-  hgModo: () => { try { localStorage.setItem('imperio_hg_modo', hgModo() === 'real' ? 'holo' : 'real'); } catch (e) {} render(); },
   pNewF: (id, b) => openPasso(curObraId(), null, b.dataset.k), hgDone: id => togglePasso(by(S.obras, curObraId()), id),
   pTpl: () => { const o = by(S.obras, curObraId()); o.passos = mkPassos(o, 0, false); save(); render(); toast('Modelo padrão aplicado: edite os passos como quiser'); },
   pCsv: () => exportPassos(by(S.obras, curObraId())), cPay: id => payContrato(id),
