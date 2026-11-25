@@ -14,24 +14,20 @@
 .hg-ctl{position:absolute;left:6px;top:6px;display:flex;gap:6px;z-index:2}
 .hg-ctl button{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(10,20,32,.65);color:#e8edf7;font-size:1.05rem;cursor:pointer;line-height:1;backdrop-filter:blur(4px)}
 .hg-ctl button:hover{background:rgba(67,217,255,.22);border-color:var(--hg)}
-.hg-svg{display:block;width:100%;height:auto;max-height:600px;overflow:hidden;cursor:grab;touch-action:pan-y;user-select:none}
-.hg-svg.zoomed{touch-action:none}.hg-svg:active{cursor:grabbing}
+.hg-svg{display:block;width:100%;height:auto;max-height:600px;overflow:hidden;cursor:grab;touch-action:none;user-select:none}
+.hg-svg:active{cursor:grabbing}
 .hg-svg .st{transition:opacity .25s}
 .hg-svg polygon{stroke:rgba(45,35,25,.45);stroke-width:.8;stroke-linejoin:round}
 .hg-svg .floorsh{fill:#000;opacity:.3}
 .hg-svg .grass{fill:#5d8c43;stroke:none}
 .hg-svg .tuft{stroke:none}.hg-svg .tuft.t0{fill:#4f7d39}.hg-svg .tuft.t1{fill:#6c9a4d}.hg-svg .tuft.t2{fill:#47722f}
-.hg-svg .soil.fa{fill:#7b5a3d}.hg-svg .soil.fb{fill:#5c422d}
-.hg-svg .strata.fa{fill:#68492f}.hg-svg .strata.fb{fill:#4a3322}
 .hg-svg .dirt{stroke:rgba(70,45,20,.3);stroke-width:.6}
 .hg-svg .dirt.d0{fill:#b08a5e}.hg-svg .dirt.d1{fill:#a5805a}.hg-svg .dirt.d2{fill:#b99468}.hg-svg .dirt.d3{fill:#9d7852}
-.hg-svg .fund.fa{fill:#a9aaa6}.hg-svg .fund.fb{fill:#86877f}.hg-svg .fund.ft{fill:#c3c4bf}
 .hg-svg .slab{fill:#b9bab5;stroke:rgba(50,50,50,.3)}
-.hg-svg .conc.fa{fill:#ece8e0}.hg-svg .conc.fb{fill:#c6c1b6}.hg-svg .conc.ft{fill:#f8f5ef}
 .hg-svg polygon.conc{stroke:rgba(80,70,60,.4)}
-.hg-svg .frame.fa,.hg-svg .frame.fb{fill:#f7f5f0;stroke:rgba(60,50,40,.5)}
+.hg-svg .frame{fill:#f7f5f0;stroke:rgba(60,50,40,.5)}
 .hg-svg .glass{fill:url(#hgGlass);stroke:rgba(30,50,70,.7)}
-.hg-svg .door.fa,.hg-svg .door.fb{fill:#8b5a33;stroke:rgba(40,25,10,.6)}
+.hg-svg .door{fill:#8b5a33;stroke:rgba(40,25,10,.6)}
 .hg-svg .tj{fill:none;stroke:rgba(70,25,10,.38);stroke-width:.8}
 .hg-svg polygon.redge{stroke:rgba(40,15,5,.35)}
 .hg-svg .shadow{opacity:.3}.hg-svg .sh{fill:#000;stroke:none}
