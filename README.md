@@ -19,18 +19,21 @@ No primeiro acesso o sistema pede para criar o **administrador**. Os demais usu�
 O sistema começa **vazio**. Para conhecer com dados fictícios: `npm run seed:demo` (cria um administrador se não houver) ou o botão
 *Administração → Backup → Dados de exemplo*. Só funciona em sistema vazio.
 
-### Configuração (variáveis de ambiente)
+### Hospedar (Coolify, Docker, VPS)
 
-| Variável | Padrão | Para quê |
+O repositório tem `Dockerfile` e healthcheck em `/api/saude`. No **Coolify**: aponte para o repositório (build pack *Dockerfile*), porta **3000**,
+adicione um **armazenamento persistente montado em `/data`** (é onde ficam banco, anexos, backups e logs) e defina as variáveis abaixo.
+
+| Variável | Obrigatória? | Para quê |
 |---|---|---|
-| `PORT` / `HOST` | `3000` / `127.0.0.1` | Onde escuta. Por padrão **só a própria máquina** acessa. |
-| `DATA_DIR` | `./data` | Banco (`imperio.db`), anexos (`uploads/`), backups (`backups/`) e logs (`logs/app.log`). |
-| `TZ_EMPRESA` | `America/Sao_Paulo` | Fuso usado para "hoje" (evita a data errada depois das 21h). |
-| `SESSION_HOURS` | `12` | Duração da sessão. |
-| `COOKIE_SECURE` | desligado | Ligue (`1`) quando houver HTTPS. |
+| `PUBLIC_URL` | **sim** | Endereço público, ex.: `https://imperio.seudominio.com`. Com ela o sistema escuta em `0.0.0.0`, liga o cookie seguro, aceita essa origem e lê o IP real do cliente atrás do proxy. |
+| `ADMIN_EMAIL` + `ADMIN_SENHA` | recomendada no 1º deploy | Cria o administrador sozinho se ainda não houver usuário (senha temporária: pede troca no 1º login). Sem elas, **o primeiro visitante cria o administrador** pela tela. Senha: mínimo 10, letras e números. Depois do 1º login podem ser removidas. |
+| `ADMIN_NOME` | não | Nome do administrador inicial (padrão "Administrador"). |
 
-**Hospedar depois:** coloque um proxy com HTTPS na frente (Caddy, Nginx), ligue `COOKIE_SECURE=1`, mude `HOST` e faça backup do `DATA_DIR`.
-Não exponha a porta direto na internet.
+Não precisa de mais nada. Os padrões do código já assumem: porta `3000`, dados em `/data`, fuso `America/Sao_Paulo`, sessão de 12 h.
+Ajustes opcionais: `PORT`, `HOST`, `DATA_DIR`, `TZ_EMPRESA`, `SESSION_HOURS`, `COOKIE_SECURE`, `TRUST_PROXY`, `LOG_QUIET`.
+
+Rode **um único processo/réplica** (SQLite) e faça cópia do volume `/data` fora do servidor (o sistema já guarda backup automático a cada 6 h dentro dele).
 
 ## Testes
 

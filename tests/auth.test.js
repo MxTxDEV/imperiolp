@@ -6,6 +6,7 @@ test('autenticação, sessão, bloqueio e CSRF', async t => {
   const S = await subir(); t.after(() => S.fechar());
   const anon = S.cliente();
   await t.test('sem login nada é acessível', async () => { for (const p of ['/api/dataset', '/api/obras', '/api/contas', '/api/usuarios']) assert.equal((await anon.get(p)).status, 401, p); });
+  await t.test('healthcheck público para o proxy', async () => { const r = await anon.get('/api/saude'); assert.equal(r.status, 200); assert.equal(r.dados.ok, true); });
   await t.test('setup só funciona uma vez', async () => { const r = await anon.post('/api/auth/setup', { nome: 'Outro', email: 'o@o.com', senha: 'SenhaForte123' }); assert.equal(r.status, 409); });
   await t.test('cookie de sessão é HttpOnly e SameSite=Strict', async () => { const c = S.cliente(); const r = await c.post('/api/auth/login', { email: 'admin@teste.com', senha: 'SenhaForte123' }); const sc = r.headers.get('set-cookie'); assert.match(sc, /HttpOnly/); assert.match(sc, /SameSite=Strict/); });
   await t.test('senha errada e e-mail inexistente dão a mesma mensagem', async () => {

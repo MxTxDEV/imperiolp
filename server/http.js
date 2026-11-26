@@ -54,15 +54,17 @@ function servirEstatico(req, res, urlPath) {
 }
 async function atender(req, res) {
   const t0 = Date.now(); headersSeguros(res);
-  const u = new URL(req.url, 'http://x'); const ip = req.socket.remoteAddress || '';
+  const u = new URL(req.url, 'http://x'); const remoto = req.socket.remoteAddress || '';
+  const ip = cfg.trustProxy ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || remoto : remoto;
   try {
     if (!u.pathname.startsWith('/api/')) { if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Método não permitido.'); return servirEstatico(req, res, u.pathname); }
+    if (u.pathname === '/api/saude' && req.method === 'GET') { require('./db').q.val('SELECT 1'); return enviar(req, res, 200, { ok: true, versao: require('../package.json').version }); }   // para o healthcheck do Coolify
     const r = routes.find(x => x.method === req.method && x.re.test(u.pathname));
     if (!r) { const outro = routes.some(x => x.re.test(u.pathname)); throw new HttpError(outro ? 405 : 404, outro ? 'Método não permitido.' : 'Rota não encontrada.'); }
     const m = u.pathname.match(r.re); const params = {}; r.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1]); });
     if (req.method !== 'GET') {   // CSRF: exige cabeçalho próprio e origem igual à do servidor
       if (req.headers['x-requested-with'] !== 'imperio') throw new HttpError(403, 'Requisição inválida.');
-      const o = req.headers.origin; if (o && new URL(o).host !== req.headers.host) throw new HttpError(403, 'Origem não permitida.');
+      const o = req.headers.origin; if (o) { let h = ''; try { h = new URL(o).host; } catch (_) { /* origem inválida */ } const ok = [req.headers.host, cfg.trustProxy && req.headers['x-forwarded-host'], cfg.publicUrl && new URL(cfg.publicUrl).host].filter(Boolean); if (!ok.includes(h)) throw new HttpError(403, 'Origem não permitida.'); }
     }
     const ctx = { req, res, params, query: Object.fromEntries(u.searchParams), ip, body: null, rawBody: null, user: null };
     if (!r.opts.publica) { ctx.user = auth.autenticar(req); if (!ctx.user) throw new HttpError(401, 'Sessão expirada. Entre de novo.'); }

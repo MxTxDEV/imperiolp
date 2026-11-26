@@ -7,6 +7,12 @@ const { criarServidor } = require('./http');
 function iniciar(opts = {}) {
   db.open(opts.dbFile);
   require('./routes');
+  // Primeiro acesso sem janela aberta: se não há usuário e ADMIN_EMAIL/ADMIN_SENHA estão definidos, cria o administrador (senha temporária).
+  const auth = require('./auth');
+  if (!opts.dbFile && auth.precisaSetup() && process.env.ADMIN_EMAIL && process.env.ADMIN_SENHA) {
+    try { auth.criarUsuario({ user: null }, { nome: process.env.ADMIN_NOME || 'Administrador', email: process.env.ADMIN_EMAIL, senha: process.env.ADMIN_SENHA, roleId: 'role_admin', senhaTemp: true }); log.info('administrador inicial criado', { email: process.env.ADMIN_EMAIL }); }
+    catch (e) { log.error('não consegui criar o administrador inicial (confira ADMIN_EMAIL e a senha: mínimo 10, letras e números)', { erro: e.message, campos: e.extra && e.extra.erros }); }
+  }
   const server = criarServidor();
   return new Promise(resolve => server.listen(opts.port ?? cfg.port, opts.host || cfg.host, () => {
     const addr = server.address(); log.info('Império ERP no ar', { url: `http://${addr.address}:${addr.port}`, dados: cfg.dataDir });
