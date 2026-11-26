@@ -40,7 +40,7 @@ async function listar(query) {
   const w = [], p = {}; if (query.entidade) { w.push('d.entidade = @e'); p.e = query.entidade; } if (query.entidadeId) { w.push('d.entidadeId = @i'); p.i = query.entidadeId; } if (query.tipo) { w.push('d.tipo = @t'); p.t = query.tipo; }
   if (query.busca) { w.push("d.nome LIKE @b ESCAPE '\\'"); p.b = '%' + String(query.busca).replace(/[%_\\]/g, x => '\\' + x) + '%'; } if (query.vencendo === '1') { w.push('d.validade IS NOT NULL AND d.validade <= @v'); p.v = U.addDays(U.hoje(), 30); }
   const ws = w.length ? 'WHERE ' + w.join(' AND ') : '', tam = Math.min(200, Math.max(1, parseInt(query.tamanho) || 50)), pag = Math.max(1, parseInt(query.pagina) || 1);
-  const total = await q.val(`SELECT COUNT(*) FROM documentos d ${ws}`, p);
+  const total = await q.val(`SELECT COUNT(*) FROM documentos d ${ws}`, ...(ws ? [p] : []));
   const rows = await q.all(`SELECT d.*, u.nome por FROM documentos d LEFT JOIN users u ON u.id = d.criadoPor ${ws} ORDER BY d.criadoEm DESC LIMIT @lim OFFSET @off`, Object.assign({}, p, { lim: tam, off: (pag - 1) * tam }));
   return { total, pagina: pag, tamanho: tam, itens: rows.map(api) };
 }

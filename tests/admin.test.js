@@ -66,3 +66,31 @@ test('dataset do painel: formato esperado pelo front e números consistentes', a
   });
   await t.test('versão do dado muda a cada alteração (o front usa para atualizar sozinho)', async () => { const v1 = (await admin.get('/api/versao')).dados.versao; await ok(admin.post('/api/fornecedores', { nome: 'Novo F' })); assert.notEqual((await admin.get('/api/versao')).dados.versao, v1); });
 });
+
+test('listagens com filtros opcionais funcionam sem filtro, com filtro e paginadas (regressão: HTTP 500 em GET /api/documentos)', async t => {
+  const S = await subir(); t.after(() => S.fechar()); const { admin, ok } = S; const M = await massa(S);
+  const up = (nome, tipo) => ok(admin.f('POST', `/api/documentos?entidade=obras&entidadeId=${M.obra}&nome=${nome}&tipo=${tipo}`, PDF, { headers: { 'content-type': 'application/pdf' } }));
+  await t.test('documentos: lista vazia sem filtros não dá erro', async () => {
+    const r = await admin.get('/api/documentos'); assert.equal(r.status, 200); assert.equal(r.dados.total, 0); assert.deepEqual(r.dados.itens, []);
+  });
+  await up('A.pdf', 'Alvar%C3%A1'); await up('B.pdf', 'Alvar%C3%A1'); await up('C.pdf', 'Contrato');
+  await t.test('documentos: sem filtros conta tudo', async () => {
+    const r = await admin.get('/api/documentos'); assert.equal(r.status, 200); assert.equal(r.dados.total, 3); assert.equal(r.dados.itens.length, 3);
+  });
+  await t.test('documentos: a contagem respeita o filtro', async () => {
+    const r = await admin.get('/api/documentos?tipo=Contrato'); assert.equal(r.status, 200); assert.equal(r.dados.total, 1); assert.equal(r.dados.itens[0].nome, 'C.pdf');
+    assert.equal((await admin.get('/api/documentos?busca=a.pdf')).dados.total, 1, 'busca por nome');
+    assert.equal((await admin.get('/api/documentos?tipo=Inexistente')).dados.total, 0);
+  });
+  await t.test('documentos: paginação mantém o total e não repete itens', async () => {
+    const p1 = (await admin.get('/api/documentos?tamanho=2&pagina=1')).dados, p2 = (await admin.get('/api/documentos?tamanho=2&pagina=2')).dados;
+    assert.equal(p1.total, 3); assert.equal(p2.total, 3); assert.equal(p1.itens.length, 2); assert.equal(p2.itens.length, 1);
+    assert.equal(new Set([...p1.itens, ...p2.itens].map(d => d.id)).size, 3);
+  });
+  await t.test('as outras listagens com a mesma construção também aceitam a chamada sem filtros', async () => {
+    for (const rota of ['/api/estoque/movimentacoes', '/api/vendas', '/api/auditoria', '/api/pedidos']) {
+      const r = await admin.get(rota); assert.equal(r.status, 200, rota); assert.equal(typeof r.dados.total, 'number', rota);
+      assert.equal((await admin.get(rota + '?tamanho=1&pagina=1')).status, 200, rota + ' paginada');
+    }
+  });
+});

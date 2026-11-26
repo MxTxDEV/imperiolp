@@ -92,7 +92,7 @@ async function pedidoApi(p) {
 async function listar(query) {
   const w = [], pr = {}; if (query.fornId) { w.push('fornId = @f'); pr.f = query.fornId; } if (query.status) { w.push('status = @s'); pr.s = query.status; } if (query.obraId) { w.push('obraId = @o'); pr.o = query.obraId; }
   const ws = w.length ? 'WHERE ' + w.join(' AND ') : '', tam = Math.min(200, Math.max(1, parseInt(query.tamanho) || 50)), pag = Math.max(1, parseInt(query.pagina) || 1);
-  const total = await q.val(`SELECT COUNT(*) FROM pedidos ${ws}`, pr); const rows = await q.all(`SELECT * FROM pedidos ${ws} ORDER BY numero DESC LIMIT @lim OFFSET @off`, Object.assign({}, pr, { lim: tam, off: (pag - 1) * tam }));
+  const total = await q.val(`SELECT COUNT(*) FROM pedidos ${ws}`, ...(ws ? [pr] : [])); const rows = await q.all(`SELECT * FROM pedidos ${ws} ORDER BY numero DESC LIMIT @lim OFFSET @off`, Object.assign({}, pr, { lim: tam, off: (pag - 1) * tam }));
   return { total, pagina: pag, tamanho: tam, itens: await Promise.all(rows.map(pedidoApi)) };
 }
 module.exports = { criarPedido, atualizarPedido, enviar, receber, estornarRecebimento, cancelar, pedidoApi, ped, listar };

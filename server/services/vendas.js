@@ -78,7 +78,7 @@ async function cancelarVenda(ctx, id, motivo) {
 async function listarVendas(query) {
   const w = [], p = {}; if (query.empId) { w.push('u.empId = @e'); p.e = query.empId; } if (query.clienteId) { w.push('v.clienteId = @c'); p.c = query.clienteId; } if (['Ativa', 'Cancelada'].includes(query.status)) { w.push('v.status = @s'); p.s = query.status; }
   const ws = w.length ? 'WHERE ' + w.join(' AND ') : '', tam = Math.min(200, Math.max(1, parseInt(query.tamanho) || 50)), pag = Math.max(1, parseInt(query.pagina) || 1);
-  const total = await q.val(`SELECT COUNT(*) FROM vendas v JOIN unidades u ON u.id = v.unidadeId ${ws}`, p);
+  const total = await q.val(`SELECT COUNT(*) FROM vendas v JOIN unidades u ON u.id = v.unidadeId ${ws}`, ...(ws ? [p] : []));
   const rows = await q.all(`SELECT v.*, u.codigo, u.empId, e.nome empNome, c.nome clienteNome,
     (SELECT COALESCE(SUM(k.valorC),0) FROM contas k WHERE k.vendaId = v.id AND k.status = 'Aberta') contasC,
     (SELECT COALESCE(SUM(l.valorC),0) FROM liquidacoes l JOIN contas k ON k.id = l.contaId WHERE k.vendaId = v.id AND k.status = 'Aberta' AND l.estornadaEm IS NULL) recebidoC

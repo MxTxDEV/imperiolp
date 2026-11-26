@@ -56,7 +56,7 @@ async function listarAuditoria(query) {
   if (U.isDate(query.de)) { w.push('ts >= @de'); p.de = query.de; } if (U.isDate(query.ate)) { w.push('ts < @ate'); p.ate = U.addDays(query.ate, 1); }
   if (query.busca) { w.push("resumo LIKE @b ESCAPE '\\'"); p.b = '%' + String(query.busca).replace(/[%_\\]/g, x => '\\' + x) + '%'; }
   const ws = w.length ? 'WHERE ' + w.join(' AND ') : '', tam = Math.min(200, Math.max(1, parseInt(query.tamanho) || 50)), pag = Math.max(1, parseInt(query.pagina) || 1);
-  const total = await q.val(`SELECT COUNT(*) FROM auditLog ${ws}`, p), itens = await q.all(`SELECT * FROM auditLog ${ws} ORDER BY id DESC LIMIT @lim OFFSET @off`, Object.assign({}, p, { lim: tam, off: (pag - 1) * tam }));
+  const total = await q.val(`SELECT COUNT(*) FROM auditLog ${ws}`, ...(ws ? [p] : [])), itens = await q.all(`SELECT * FROM auditLog ${ws} ORDER BY id DESC LIMIT @lim OFFSET @off`, Object.assign({}, p, { lim: tam, off: (pag - 1) * tam }));
   return { total, pagina: pag, tamanho: tam, itens };
 }
 /* ---------- configurações ---------- */

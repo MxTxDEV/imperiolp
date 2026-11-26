@@ -93,7 +93,7 @@ async function listarMovs(query) {
   if (U.isDate(query.de)) add('m.data >= @de', 'de', query.de); if (U.isDate(query.ate)) add('m.data <= @ate', 'ate', query.ate);
   if (query.busca) { w.push("(mt.nome LIKE @b ESCAPE '\\' OR m.doc LIKE @b ESCAPE '\\' OR m.motivo LIKE @b ESCAPE '\\')"); p.b = '%' + String(query.busca).replace(/[%_\\]/g, x => '\\' + x) + '%'; }
   const ws = w.length ? 'WHERE ' + w.join(' AND ') : '', tam = Math.min(200, Math.max(1, parseInt(query.tamanho) || 50)), pag = Math.max(1, parseInt(query.pagina) || 1);
-  const total = await q.val(`SELECT COUNT(*) FROM movimentacoes m JOIN materiais mt ON mt.id = m.matId ${ws}`, p);
+  const total = await q.val(`SELECT COUNT(*) FROM movimentacoes m JOIN materiais mt ON mt.id = m.matId ${ws}`, ...(ws ? [p] : []));
   const rows = await q.all(`SELECT m.*, mt.nome matNome, mt.unidade, o.nome obraNome, f.nome fornNome, u.nome porNome FROM movimentacoes m JOIN materiais mt ON mt.id = m.matId LEFT JOIN obras o ON o.id = m.obraId LEFT JOIN fornecedores f ON f.id = m.fornId LEFT JOIN users u ON u.id = m.criadoPor ${ws} ORDER BY m.data DESC, m.criadoEm DESC LIMIT @lim OFFSET @off`, Object.assign({}, p, { lim: tam, off: (pag - 1) * tam }));
   return { total, pagina: pag, tamanho: tam, itens: rows.map(r => ({ id: r.id, data: r.data, matId: r.matId, matNome: r.matNome, unidade: r.unidade, tipo: r.tipo, sinal: r.sinal, qtd: r.qtd, custoUnit: U.fromC(r.custoUnitC), valor: U.fromC(Math.round(r.qtd * r.custoUnitC)), obraId: r.obraId, obraNome: r.obraNome, passoId: r.passoId, fornId: r.fornId, fornNome: r.fornNome, doc: r.doc, motivo: r.motivo, estornada: !!r.estornada, estornoDe: r.estornoDe, recId: r.recId, pedidoId: r.pedidoId, por: r.porNome, criadoEm: r.criadoEm })) };
 }
