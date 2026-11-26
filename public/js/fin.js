@@ -49,7 +49,7 @@ function model() {
   const R = tot(L, 'Receita'), D = tot(L, 'Despesa'), pR = tot(P, 'Receita'), pD = tot(P, 'Despesa');
   const nRec = L.filter(l => l.tipo === 'Receita').length;
   const ctAbertos = S.contratos.filter(c => c.status === 'Vigente' || c.status === 'Rascunho');
-  const aPagar = sum(ctAbertos, c => Math.max(0, c.valor - c.pago));
+  const aPagar = sum(ctAbertos, c => Math.max(0, c.aPagar != null ? c.aPagar : c.valor - c.pago));
   return {
     S, n, keys, months, L, R, D, res: R - D, pR, pD, pres: pR - pD,
     margin: R ? (R - D) / R : null, pMargin: pR ? (pR - pD) / pR : null,
@@ -84,7 +84,7 @@ function numbers(M) {
     ['Resultado', f(M.res), delta(M.res, M.pres, true, f), spark(ms.map(x => x.res), 'var(--gold)'), ['Receitas − despesas do período', 'É resultado de caixa, não lucro contábil.'], M.res < 0 ? 'down' : ''],
     ['Margem', fp(M.margin), M.margin != null && M.pMargin != null ? `<span class="dl ${M.margin >= M.pMargin ? 'up' : 'down'}" ${tip('Margem do período anterior', fp(M.pMargin))}>${M.margin >= M.pMargin ? '▲' : '▼'} ${((M.margin - M.pMargin) * 100).toFixed(1).replace('.', ',')} p.p.</span>` : '', spark(ms.filter(x => x.m != null).map(x => x.m), 'var(--c4)'), ['Resultado ÷ receitas']],
     ['Despesa média/mês', f(M.burn), delta(M.burn, M.pBurn, false, f), '', ['Quanto a empresa gasta por mês em média no período']],
-    ['A pagar em contratos', f(M.aPagar), `<span class="fn-s">${M.ctAbertos.length} contrato(s) em aberto</span>`, '', ['Valor dos contratos vigentes e em rascunho ainda não pago', 'Situação de hoje, não segue o período.']]
+    ['A pagar em contratos', f(M.aPagar), `<span class="fn-s">${M.ctAbertos.length} contrato(s) em aberto</span>`, '', ['Medições e títulos de contratos vigentes ainda não pagos', 'Situação de hoje, não segue o período.']]
   ];
   return `<div class="fn-row">${it.map(([l, v, d, sp, t, cls]) => `<div class="fn" ${tip(l, ...t)}><small>${l}</small><b class="${cls || ''}">${v}</b><div class="fn-d">${d}${sp}</div></div>`).join('')}</div>`;
 }
@@ -210,7 +210,7 @@ function page() {
   const M = model(), S = M.S, anim = st.anim; st.anim = false;
   const per = PER.map(p => `<button class="seg ${st.per === p[0] ? 'on' : ''}" ${act('per', p[0])} aria-pressed="${st.per === p[0]}">${p[1]}</button>`).join('');
   const head = C.header('Financeiro', 'Receitas, despesas, resultado e contratos, com comparação ao período anterior.',
-    `<div class="seg-g" role="group" aria-label="Período">${per}</div><button class="btn ghost sm" data-act="csv" data-k="lancamentos">⬇ CSV</button><button class="btn sm" data-act="new" data-k="lancamentos">+ Lançamento</button>`);
+    `<div class="seg-g" role="group" aria-label="Período">${per}</div><button class="btn ghost sm" data-act="finCsv">⬇ CSV</button>${C.can('financeiro:criar') ? '<button class="btn ghost sm" data-act="novaConta" data-v="Receber">+ A receber</button><button class="btn sm" data-act="novaConta" data-v="Pagar">+ A pagar</button>' : ''}`);
   const nome = (arr, blank) => k => k ? C.nm(arr, k) : blank;
   const charts = `<div class="fc-grid">
     ${card('Fluxo de caixa', `${M.n} meses · clique no mês`, fluxo(M), 'w2')}
@@ -233,7 +233,7 @@ function table(M) {
   const chip = (k, label) => `<span class="fchip i">${E(label)} <button ${act('clr', k)} aria-label="Remover filtro">✕</button></span>`;
   const chips = [st.mes && chip('mes', mLong(st.mes)), st.cat && chip('cat', st.cat), st.obra != null && chip('obra', st.obra ? C.nm(S.obras, st.obra) : 'Sem obra')].filter(Boolean).join('');
   const tot = sum(ls, l => l.tipo === 'Receita' ? l.valor : -l.valor);
-  return `<div class="fin-t"><h3>Lançamentos <small>${ls.length} no período${chips ? ' filtrado' : ''} · saldo ${C.brl(tot)}</small></h3>
+  return `<div class="fin-t"><h3>Baixas (caixa) <small>${ls.length} no período${chips ? ' filtrado' : ''} · saldo ${C.brl(tot)}</small></h3>
     <div class="fin-f"><div class="seg-g" role="group" aria-label="Tipo">${['Todos', 'Receita', 'Despesa'].map(t => `<button class="seg ${st.tipo === t ? 'on' : ''}" ${act('tipo', t)}>${t === 'Todos' ? 'Todos' : t + 's'}</button>`).join('')}</div>${chips}${chips ? `<button class="lnk" ${act('clr', 'all')}>Limpar filtros</button>` : ''}</div></div>` +
     C.table([
       { h: 'Data', f: l => C.dt(l.data) }, { h: 'Descrição', f: l => `<b>${E(l.desc)}</b><br><small class="mut">${E(catOf(l))}</small>` }, { h: 'Tipo', f: l => C.pill(l.tipo) },

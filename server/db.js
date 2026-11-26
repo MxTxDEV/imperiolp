@@ -54,6 +54,9 @@ const q = {
   val: (sql, ...p) => { const r = get().prepare(sql).get(...ajusta(sql, p)); return r ? Object.values(r)[0] : null; },
 };
 const bump = () => { version++; };
+// resultado em cache enquanto nada foi gravado (versão do dado) e o dia não virou; zera sozinho a cada gravação
+const caches = new Map();
+function memo(chave, fn) { const v = bootId + version + ':' + new Date().toISOString().slice(0, 13); const c = caches.get(chave); if (c && c.v === v) return c.r; const r = fn(); if (caches.size > 200) caches.clear(); caches.set(chave, { v, r }); return r; }
 const dataVersion = () => bootId + '-' + version;
 function close() { if (db) { db.close(); db = null; depth = 0; } }
-module.exports = { open, get, tx, q, bump, dataVersion, close };
+module.exports = { open, get, tx, q, bump, dataVersion, close, memo };

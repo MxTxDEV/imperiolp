@@ -5,23 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Império ERP | Gestão de Obras e Empreendimentos</title>
 <meta name="description" content="Painel de gestão da Império Negócios Imobiliários: obras, empreendimentos, estoque, funcionários e financeiro.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/bi.css">
 <link rel="stylesheet" href="css/fin.css">
 <link rel="stylesheet" href="css/holo.css">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<div class="app">
+<div id="auth" class="auth" hidden></div>
+<div class="app" hidden>
   <aside class="side" id="side">
     <div class="brand"><div class="logo">I</div><div class="lbl"><b>Império</b><small>Negócios Imobiliários</small></div><button class="pin lbl" id="btnPin" aria-pressed="false" title="Fixar menu aberto">📌</button></div>
     <nav id="nav"></nav>
-    <div class="side-foot">
-      <button class="btn ghost sm" id="btnReset" title="Restaurar dados de exemplo"><span>↺</span><span class="lbl"> Restaurar dados de exemplo</span></button>
-      <small class="lbl">Dados salvos neste navegador</small>
-    </div>
+    <div class="side-foot"><small class="lbl">Dados salvos no servidor</small></div>
   </aside>
   <div class="main">
     <header class="top">
@@ -31,20 +27,25 @@
         <button class="btn sm" id="btnQuick">+ Ação rápida</button>
         <button class="icon-btn" id="btnBell" aria-label="Alertas">🔔<i id="bellN" class="badge">0</i></button>
         <button class="icon-btn" id="btnTheme" aria-label="Tema">🌗</button>
-        <div class="user"><span>AD</span><div><b>Administrador</b><small>Acesso total</small></div></div>
+        <button class="user" id="btnUser" aria-label="Minha conta e sair"><span id="uIni">?</span><div><b id="uNome">—</b><small id="uPerfil"></small></div></button>
       </div>
     </header>
     <main id="view"></main>
   </div>
 </div>
+<button id="fab" class="fab" aria-label="Ação rápida: criar" hidden>＋</button>
 <div id="modal" class="modal" hidden></div>
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="tip" class="tip" role="tooltip" hidden></div>
-<script src="js/data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/core.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/bi.js"></script>
 <script src="js/fin.js"></script>
 <script src="js/holo.js"></script>
-<script src="js/app.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/pages2.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>

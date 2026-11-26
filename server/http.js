@@ -43,7 +43,7 @@ function erroSqlite(e) {
   return null;
 }
 function servirEstatico(req, res, urlPath) {
-  let rel = decodeURIComponent(urlPath); if (rel === '/' || rel === '') rel = '/index.html';
+  let rel; try { rel = decodeURIComponent(urlPath); } catch (_) { res.statusCode = 400; return res.end('Requisição inválida'); } if (rel === '/' || rel === '') rel = '/index.html';
   const abs = path.normalize(path.join(cfg.publicDir, rel));
   if (!abs.startsWith(cfg.publicDir + path.sep) && abs !== cfg.publicDir) { res.statusCode = 403; return res.end('Proibido'); }
   fs.readFile(abs, (err, buf) => {

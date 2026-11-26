@@ -93,7 +93,7 @@ function carregarExemplo(ctx) {
     for (let m = 11; m >= 0; m--) {
       const base = U.addMonths(H, -m), dia = U.addDays(base, 0 - 0);
       [['Aluguel do escritório', 'cat_adm', 8500, null], ['Contabilidade', 'cat_adm', 3200, null], ['Software e internet', 'cat_adm', 1450, null]].forEach(([desc, cat, val]) => { const venc = base; if (venc <= H) fin.criarContas(ctx, { tipo: 'Pagar', descricao: desc, valor: val, vencimento: venc, competencia: venc, catId: cat, jaPago: { data: venc, forma: 'Débito' } }); });
-      OBRAS.slice(0, 3).forEach((o, i) => { const venc = U.addDays(base, 5 + i); if (venc <= H && m < 10 - i) fin.criarContas(ctx, { tipo: 'Pagar', descricao: 'Mão de obra e serviços', valor: 60000 + i * 15000 + m * 1500, vencimento: venc, competencia: venc, catId: 'cat_empreit', obraId: o.id, jaPago: { data: venc, forma: 'PIX' } }); });
+      OBRAS.slice(0, 3).forEach((o, i) => { const venc = U.addDays(base, 5 + i); if (venc <= H && m < 10 - i) fin.criarContas(ctx, { tipo: 'Pagar', descricao: 'Mão de obra e serviços', valor: 380000 + i * 140000 + m * 9000, vencimento: venc, competencia: venc, catId: 'cat_empreit', obraId: o.id, jaPago: { data: venc, forma: 'PIX' } }); });
     }
     /* folha: 3 meses fechados e pagos + o mês atual aberto */
     for (let m = 3; m >= 0; m--) {
@@ -115,6 +115,6 @@ module.exports = { carregarExemplo, cpf, cnpj };
 if (require.main === module) {
   process.env.LOG_QUIET = process.env.LOG_QUIET || '1'; db.open();
   const auth = require('./auth'); let user = q.one("SELECT * FROM users WHERE roleId = 'role_admin' AND ativo = 1 ORDER BY criadoEm LIMIT 1");
-  if (!user) { const senha = process.env.ADMIN_SENHA || crypto.randomBytes(9).toString('base64url') + 'a1'; const email = process.env.ADMIN_EMAIL || 'admin@imperio.local'; auth.criarUsuario({ user: null }, { nome: 'Administrador', email, senha, roleId: 'role_admin', senhaTemp: !process.env.ADMIN_SENHA }); user = q.one('SELECT * FROM users WHERE email = ?', email); console.log(`Usuário administrador criado: ${email}  senha temporária: ${senha}  (será pedida a troca no primeiro acesso)`); }
+  if (!user) { const senha = process.env.ADMIN_SENHA || crypto.randomBytes(9).toString('base64url') + 'a1'; const email = process.env.ADMIN_EMAIL || 'admin@imperio.local'; auth.criarUsuario({ user: null }, { nome: 'Administrador', email, senha, roleId: 'role_admin', senhaTemp: !process.env.ADMIN_SENHA }); user = q.one('SELECT * FROM users WHERE email = ?', email); console.log(`Usuário administrador criado: ${email}  senha: ${senha}` + (process.env.ADMIN_SENHA ? "" : "  (temporária: será pedida a troca no primeiro acesso)")); }
   const t0 = Date.now(); carregarExemplo({ user: { id: user.id, nome: user.nome, permissoes: ['*'] } }); console.log('Dados de exemplo carregados em ' + (Date.now() - t0) + ' ms.'); db.close();
 }

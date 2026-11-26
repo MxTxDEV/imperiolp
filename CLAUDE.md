@@ -14,6 +14,11 @@ Antes de atender **qualquer** pedido neste repositório, consulte o Segundo Cér
 
 ## Projeto
 
-- Sistema estático (HTML/CSS/JS puro, sem build), dados no `localStorage` do navegador.
-- Entrada: `index.html`. Código: `js/app.js` (telas), `js/bi.js` (Painel geral BI), `js/data.js` (dados de exemplo).
+- Servidor **Node 22 + SQLite** (`node:sqlite`, sem dependências) e interface em HTML/CSS/JS puro, multiusuário com perfis de acesso.
+- Rodar: `npm start` (http://127.0.0.1:3000). Testar: `npm test` (78 testes) e `npm run test:e2e`.
+- Servidor em `server/` (rotas em `routes.js`, regras em `server/services/*`, cadastros declarados em `entities.js`, migrações em `server/migrations/`).
+  Interface em `public/` (`core.js` núcleo, `pages.js`/`pages2.js`/`admin.js` telas, `bi.js` painel, `fin.js` financeiro, `holo.js` holograma).
+- Regras que não se quebram: totais sempre derivados (nunca coluna), dinheiro em centavos, estorno em vez de apagar, status da obra derivado dos passos,
+  permissão conferida no servidor. Veja o `README.md`.
+- Dados de exemplo só por `npm run seed:demo` ou pelo botão do administrador; o sistema nasce vazio.
 - Comunicação com o usuário em português, respostas curtas.

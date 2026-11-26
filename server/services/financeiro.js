@@ -153,7 +153,8 @@ function obterConta(id) {
     .map(l => ({ id: l.id, data: l.data, valor: money(l.valorC), desconto: money(l.descontoC), juros: money(l.jurosC), multa: money(l.multaC), caixa: money(l.caixaC), forma: l.forma, bancoId: l.bancoId, bancoNome: l.bancoNome, doc: l.doc, obs: l.obs, por: l.porNome, estornada: !!l.estornadaEm, estornadaEm: l.estornadaEm, motivoEstorno: l.motivoEstorno, estornoPor: l.estornoPorNome }));
   return Object.assign(paraApi(r), { liquidacoes: liqs });
 }
-function resumo() {
+function resumo() { return require('../db').memo('fin:resumo:' + U.hoje(), resumoCalc); }
+function resumoCalc() {
   const hoje = U.hoje(), p = { hoje, d7: U.addDays(hoje, 7), d30: U.addDays(hoje, 30), mes: hoje.slice(0, 7) };
   const rows = q.all(`WITH s AS (SELECT c.tipo, c.vencimento, c.valorC - ${PAGO_SQL} AS saldo FROM contas c WHERE c.status = 'Aberta')
     SELECT tipo, COALESCE(SUM(CASE WHEN saldo > 0 THEN saldo END),0) aberto, COALESCE(SUM(CASE WHEN saldo > 0 AND vencimento < @hoje THEN saldo END),0) vencido,

@@ -10,9 +10,10 @@ const contratos = require('./contratos');
 const crud = require('../crud');
 const { ENTIDADES } = require('../entities');
 
-function montar(user) {
+function montar(user) { const chave = 'dataset:' + [...user.permissoes].sort().join(',') + ':' + U.hoje(); return require('../db').memo(chave, () => calcular(user)); }
+function calcular(user) {
   const ver = m => can(user, m + ':ver'), desde = U.addMonths(U.hoje(), -36);
-  const S = { versao: require('../db').dataVersion(), hoje: U.hoje(), empreendimentos: [], obras: [], materiais: [], movs: [], funcionarios: [], fornecedores: [], tarefas: [], contratos: [], lancamentos: [], clientes: [], categorias: [], bancos: [] };
+  const S = { versao: require('../db').dataVersion(), hoje: U.hoje(), empreendimentos: [], obras: [], materiais: [], movs: [], funcionarios: [], fornecedores: [], tarefas: [], contratos: [], lancamentos: [], clientes: [], categorias: [], bancos: [], usuarios: q.all('SELECT id, nome FROM users WHERE ativo = 1 ORDER BY nome') };
   const lista = ent => crud.listar(ENTIDADES[ent], { arquivados: '0', tamanho: 200 }, user, true).itens;
   if (ver('empreendimentos') || ver('painel') || ver('obras')) S.empreendimentos = lista('empreendimentos').map(e => ({ id: e.id, nome: e.nome, tipo: e.tipo, status: e.status, cidade: e.cidade, bairro: e.bairro, unidades: Math.max(e.unidadesPrevistas, e.unidadesCadastradas), unidadesPrevistas: e.unidadesPrevistas, vendidas: e.vendidas, reservadas: e.reservadas, disponiveis: e.disponiveis, vgv: e.vgv, vgvVendido: e.vgvVendido, recebido: e.recebido, entrega: e.entrega, versao: e.versao }));
   if (ver('obras') || ver('painel') || ver('andamento')) {

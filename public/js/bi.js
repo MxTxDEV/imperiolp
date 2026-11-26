@@ -72,7 +72,7 @@ function options(k) {
   if (k === 'resp') return [...new Set(S.obras.map(o => o.resp).filter(Boolean))].map(v => ({ v, l: v }));
   return [...new Set(S.materiais.map(m => m.cat))].map(v => ({ v, l: v }));
 }
-const labelOf = (k, v) => (options(k).find(o => o.v === v) || { l: v }).l;
+const labelOf = (k, v) => (options(k).find(o => o.v === v) || { l: '(registro removido)' }).l;
 // dimensões de cada registro; sem valor ('') some quando há inclusão e permanece quando só há exclusão
 function dRef(obraId, empId) {
   const o = obraId ? C.by(C.S().obras, obraId) : null;
@@ -100,7 +100,11 @@ function flow(lanc, keys) {
     return { k, r, d, s: r - d };
   });
 }
+function limpaSel() {   // tira dos filtros salvos o que não existe mais (obra/empreendimento arquivados ou excluídos)
+  ['emp', 'obra', 'resp', 'cat'].forEach(k => { const ids = new Set(options(k).map(o => o.v)); st.sel[k].i = st.sel[k].i.filter(v => ids.has(v)); st.sel[k].x = st.sel[k].x.filter(v => ids.has(v)); });
+}
 function model() {
+  limpaSel();
   const S = C.S();
   const all = S.lancamentos.map(l => dkey(l.data)).filter(Boolean).sort();
   let n = PERIODS.find(p => p[0] === st.period)[2];
@@ -128,7 +132,7 @@ function model() {
   const ev = active.map(evm);
   const BAC = sum(ev, x => x.BAC), AC = sum(ev, x => x.AC), EV = sum(ev, x => x.EV), EAC = sum(ev, x => x.EAC);
   const unid = sum(emps, e => e.unidades), vend = sum(emps, e => e.vendidas), res = sum(emps, e => e.reservadas);
-  const vgv = sum(emps, e => e.vgv), vgvV = sum(emps, e => ratio(e.vendidas, e.unidades) * e.vgv || 0);
+  const vgv = sum(emps, e => e.vgv), vgvV = sum(emps, e => e.vgvVendido != null ? e.vgvVendido : (ratio(e.vendidas, e.unidades) * e.vgv || 0));
   const low = mats.filter(C.low);
   const abertas = tarefas.filter(t => t.status !== 'Resolvida'), vencidas = abertas.filter(t => C.daysTo(t.prazo) < 0);
   return {
@@ -169,6 +173,7 @@ function insights(M) {
   conc(M.lancP.filter(l => l.tipo === 'Despesa'), l => l.obraId, 'da despesa em uma só obra', 'obra', M.S.obras);
   M.emps.filter(e => e.status === 'Entregue' && e.unidades - e.vendidas - e.reservadas > 0).forEach(e => { const d = e.unidades - e.vendidas - e.reservadas; add('info', '🏠', `${d} ${d > 1 ? 'unidades prontas' : 'unidade pronta'} para vender`, `${e.nome} já foi entregue e ainda tem ≈ ${R$s(e.vgv / e.unidades * d)} de VGV disponível.`, { toggle: ['emp', e.id] }); });
   if (M.res > 0) add('info', '🔖', `${M.res} unidades reservadas`, `Ainda não viraram venda: ≈ ${R$s(sum(M.emps, e => e.reservadas * e.vgv / (e.unidades || 1)))} de VGV.`, { drill: 'vendas' });
+  (C.alertas ? C.alertas() : []).filter(x => /passo\(s\) atrasado|Contrato|conta\(s\) a (pagar|receber) vencida|Documento|Reserva vencida/.test(x.t)).forEach(x => add(x.c === 'red' ? 'crit' : 'warn', x.ic, x.t, x.s, { go: x.h }));
   const rank = { crit: 0, warn: 1, info: 2, ok: 3 };
   out.sort((x, y) => rank[x.sev] - rank[y.sev]);
   return out.length ? out : [{ sev: 'ok', ic: '✅', title: 'Tudo sob controle', text: 'Nenhuma regra de atenção disparou para os filtros atuais.' }];
@@ -314,20 +319,20 @@ function salesPanel(M) {
       <div class="rk-t"><span><b>${E(e.nome)}</b> ${C.pill(e.status)}</span><b>${fp(ratio(e.vendidas, e.unidades), 0)}</b></div>
       <div class="stack"><i class="c3" style="width:${ratio(e.vendidas, e.unidades) * 100 || 0}%"></i><i class="c2" style="width:${ratio(e.reservadas, e.unidades) * 100 || 0}%"></i></div>
       <small class="mut">${e.vendidas} vendidas · ${e.reservadas} reservadas · ${disp} disponíveis · VGV ${R$s(e.vgv)}</small></div>`; }).join('');
-  return `<div class="s-sum"><div><small>Unidades vendidas</small><b>${M.vend}<em>/${M.unid}</em></b></div><div><small>VGV vendido <i ${tip('Estimativa', 'VGV × proporção de unidades vendidas de cada empreendimento. Não é valor contratado.')}>(est.)</i></small><b>${R$s(M.vgvV)}</b></div><div><small>VGV a vender</small><b>${R$s(M.vgv - M.vgvV)}</b></div></div>${rows}
+  return `<div class="s-sum"><div><small>Unidades vendidas</small><b>${M.vend}<em>/${M.unid}</em></b></div><div><small>VGV vendido <i ${tip('Valor das vendas ativas', 'Soma do valor das vendas registradas (não é estimativa).')}>(vendas)</i></small><b>${R$s(M.vgvV)}</b></div><div><small>VGV a vender</small><b>${R$s(M.vgv - M.vgvV)}</b></div></div>${rows}
   <div class="legend"><span><i class="lg c3"></i>Vendidas</span><span><i class="lg c2"></i>Reservadas</span><span><i class="lg track"></i>Disponíveis</span></div>`;
 }
 
 /* ---------- origem da receita e destino da despesa ---------- */
 function flowRank(M, tipo) {
   const isR = tipo === 'Receita', S = M.S;
-  const key = isR ? (l => dRef(l.obraId, l.empId).emp) : (l => l.obraId), dim = isR ? 'emp' : 'obra';
+  const key = isR ? (l => dRef(l.obraId, l.empId).emp) : (l => l.obraId || ('cat:' + (l.cat || ''))), dim = isR ? 'emp' : 'obra';
   const cur = group(M.lancP.filter(l => l.tipo === tipo), key, l => l.valor), pv = new Map(group(M.lancPrev.filter(l => l.tipo === tipo), key, l => l.valor).map(x => [x.k, x.v]));
   const tot = sum(cur, x => x.v), src = isR ? S.empreendimentos : S.obras;
   return rankList(cur.map((x, i) => {
-    const nome = x.k ? C.nm(src, x.k) : (isR ? 'Sem empreendimento' : 'Sem obra (administrativo)'), p = pv.get(x.k);
-    return { l: nome, v: x.v, val: R$s(x.v), col: isR ? 'var(--c1)' : 'var(--c2)', on: x.k && st.sel[dim].i.includes(x.k), bi: x.k ? a('toggle', x.k, dim) : '',
-      sub: `${fp(x.v / tot, 0)} do total${st.cmp && p != null ? ` · antes ${R$s(p)}` : ''}`, tip: [`${R$(x.v)} (${fp(x.v / tot, 1)} do total)`, st.cmp && p != null ? `Período anterior: ${R$s(p)}` : '', x.k ? 'Clique para filtrar' : ''] };
+    const semObra = !isR && String(x.k).startsWith('cat:'), nome = semObra ? ((x.k.slice(4) || 'Sem categoria') + ' (sem obra)') : x.k ? (C.by(src, x.k) ? C.nm(src, x.k) : '(registro removido)') : (isR ? 'Sem empreendimento' : 'Sem obra'), p = pv.get(x.k);
+    return { l: nome, v: x.v, val: R$s(x.v), col: isR ? 'var(--c1)' : 'var(--c2)', on: x.k && !semObra && st.sel[dim].i.includes(x.k), bi: x.k && !semObra ? a('toggle', x.k, dim) : '',
+      sub: `${fp(x.v / tot, 0)} do total${st.cmp && p != null ? ` · antes ${R$s(p)}` : ''}`, tip: [`${R$(x.v)} (${fp(x.v / tot, 1)} do total)`, st.cmp && p != null ? `Período anterior: ${R$s(p)}` : '', x.k && !semObra ? 'Clique para filtrar' : ''] };
   }), tot, 'Sem lançamentos no período.');
 }
 
@@ -399,7 +404,7 @@ function page() {
   const note = M.lanc.length < C.S().lancamentos.length || M.obras.length < C.S().obras.length;
   setTimeout(() => { anim = false; }, 1200);
   return C.header(`${sau}, Império 👋`, 'Painel geral — central de inteligência de obras, vendas, estoque e finanças.',
-    `<button class="btn ghost" ${a('csv')}>⬇ Exportar CSV</button><button class="btn ghost" ${a('print')}>🖨 Imprimir / PDF</button><button class="btn ghost" data-act="mov" data-v="Entrada">📥 Entrada</button><button class="btn ghost" data-act="mov" data-v="Saída">📤 Saída</button><button class="btn" data-act="new" data-k="obras">+ Obra</button>`)
+    `<button class="btn ghost" ${a('csv')}>⬇ Exportar CSV</button><button class="btn ghost" ${a('print')}>🖨 Imprimir / PDF</button>${C.can('estoque:criar') ? '<button class="btn ghost" data-act="mov" data-v="Entrada">📥 Entrada</button><button class="btn ghost" data-act="mov" data-v="Saída">📤 Saída</button>' : ''}${C.can('obras:criar') ? '<button class="btn" data-act="new" data-k="obras">+ Obra</button>' : ''}`)
   + filterBar() + `<div class="bi ${anim ? 'bi-anim' : ''}">
   <p class="bi-scope">Período <b>${per}</b> (${M.n} ${M.n > 1 ? 'meses' : 'mês'})${cmp ? ' comparado aos ' + M.prevMonths.length + ' anteriores' : ''}. Receita, despesa e movimentação seguem o período; obras, vendas, estoque e equipe mostram a situação de hoje.${note && anyFilter() ? ' Lançamentos sem vínculo com a obra/empreendimento filtrado ficam de fora.' : ''}</p>
   <div class="bk-grid">${kp.map(kpiCard).join('')}</div>

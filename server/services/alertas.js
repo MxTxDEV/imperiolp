@@ -8,8 +8,9 @@ const BRL = n => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' 
 const dt = s => s ? s.split('-').reverse().join('/') : '—';
 
 /** Alertas e pendências, filtrados pelo que o usuário pode ver. Uma única fonte para o sino e para o painel. */
-function listar(user) {
-  const out = [], hoje = U.hoje(), add = (mod, c, ic, t, s, h) => { if (can(user, mod + ':ver')) out.push({ c, ic, t, s, h, mod }); };
+function listar(user) { return require('../db').memo('alertas:' + U.hoje(), () => calcular()).filter(a => can(user, a.mod + ':ver')); }
+function calcular() {
+  const out = [], hoje = U.hoje(), user = { permissoes: ['*'] }, add = (mod, c, ic, t, s, h) => { out.push({ c, ic, t, s, h, mod }); };
   for (const m of q.all('SELECT * FROM materiais WHERE ativo = 1 AND estoque < minimo ORDER BY nome')) add('estoque', 'red', '📦', 'Estoque baixo: ' + m.nome, `${m.estoque} ${m.unidade} em estoque (mínimo ${m.minimo})`, '#/estoque');
   const ob = q.all('SELECT * FROM obras WHERE ativo = 1'), met = obras.metricas(ob.map(o => o.id));
   for (const o of ob) {
