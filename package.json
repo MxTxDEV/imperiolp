@@ -1,0 +1,13 @@
+{
+  "name": "imperio-erp",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Império ERP — gestão de obras e empreendimentos (servidor Node + SQLite, multiusuário)",
+  "type": "commonjs",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "seed:demo": "node server/seed.js"
+  }
+}
