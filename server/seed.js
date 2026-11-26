@@ -14,6 +14,7 @@ const contratos = require('./services/contratos');
 const vendas = require('./services/vendas');
 const compras = require('./services/compras');
 const folha = require('./services/folha');
+const documentos = require('./services/documentos');
 
 function dvCpf(arr) { let s = 0; arr.forEach((x, i) => { s += x * (arr.length + 1 - i); }); const r = (s * 10) % 11; return r === 10 ? 0 : r; }
 const cpf = n => { const d = String(n).padStart(9, '0').split('').map(Number); d.push(dvCpf(d)); d.push(dvCpf(d)); return d.join(''); };
@@ -84,7 +85,8 @@ async function carregarExemplo(ctx) {
       for (const [i, u] of e.un.slice(0, e.vend).entries()) {
         const un = await q.one('SELECT valorTabelaC FROM unidades WHERE id = ?', u), data = d(-(15 + (i * 13) % 340)), total = U.fromC(un.valorTabelaC), entrada = Math.round(total * 0.1);
         const v = await vendas.criarVenda(ctx, { unidadeId: u, clienteId: CL[ci++ % CL.length], data, valorTotal: total, entradaValor: entrada, entradaVencimento: data, parcelas: 12, primeiroVencimento: U.addMonths(data, 1) });
-        for (const c of (await fin.listarContas({ vendaId: v, tamanho: 50 })).itens) if (c.vencimento <= H) await fin.liquidar(ctx, c.id, { valor: c.valor, data: c.vencimento, forma: 'Boleto' });
+        const atrasa = ci % 13 === 0; // alguns compradores estão com as parcelas dos últimos 60 dias em atraso
+        for (const c of (await fin.listarContas({ vendaId: v, tamanho: 50 })).itens) if (c.vencimento <= H && !(atrasa && c.vencimento > d(-60))) await fin.liquidar(ctx, c.id, { valor: c.valor, data: c.vencimento, forma: 'Boleto' });
       }
       for (const u of e.un.slice(e.vend, e.vend + e.res)) await vendas.reservar(ctx, u, { clienteId: CL[ci++ % CL.length], reservaAte: d(10) });
     }
@@ -107,6 +109,89 @@ async function carregarExemplo(ctx) {
     const TAR = [['Repor estoque de aço CA-50', 1, 'Alta', 'Aberta', 3], ['Vistoria do corpo de bombeiros - Torre A', 0, 'Alta', 'Em andamento', 10], ['Replanejar cronograma da Fase 1 (atrasada)', 2, 'Alta', 'Aberta', 5], ['Liberar alvará da Torre Business', 3, 'Média', 'Em andamento', 20], ['Comprar EPIs (capacetes)', 0, 'Média', 'Aberta', 7], ['Entrega das chaves - Jardins', 4, 'Baixa', 'Resolvida', -30]];
     for (const [titulo, oi, prio, status, prazo] of TAR) await mk('tarefas', { titulo, obraId: OBRAS[oi].id, prio, status, prazo: d(prazo) });
     for (let i = 1; i <= 5; i++) await mk('diario', { obraId: OBRAS[0].id, data: d(-i), clima: i === 2 ? 'Chuva leve' : 'Bom', equipe: 18 + i, servicos: 'Concretagem e armação do pavimento ' + (14 - i), ocorrencias: i === 2 ? 'Paralisação de 2h por chuva' : '' });
+
+    /* materiais das casas de placas */
+    MT.push(await mk('materiais', { nome: 'Placa de concreto pré-moldada', categoria: 'Placas', unidade: 'un', minimo: 60, fornId: F[1], local: 'Pátio', estoqueInicial: 140, custoInicial: 310 }));
+    MT.push(await mk('materiais', { nome: 'Telha de fibrocimento 2,44m', categoria: 'Outros', unidade: 'un', minimo: 200, fornId: F[4], local: 'Pátio', estoqueInicial: 380, custoInicial: 46 }));
+
+    /* materiais previstos nos passos que ainda não foram concluídos (aparecem em Andamento > Materiais e custos) */
+    const NEC = [['preliminares', [[10, 20], [11, 60]]], ['Fundação', [[0, 600], [1, 200], [2, 50], [3, 40]]], ['Estrutura', [[0, 1800], [1, 700], [2, 120], [3, 110]]], ['Alvenaria', [[4, 40], [5, 7000], [0, 350], [2, 70]]],
+      ['Instalações', [[6, 240], [7, 55]]], ['Cobertura', [[0, 220]]], ['Revestimentos', [[9, 1100], [0, 300]]], ['Pintura', [[8, 120]]], ['Levantamento das placas', [[12, 120], [0, 150]]], ['Telhado', [[13, 900]]]];
+    for (const [oi, o] of OBRAS.entries()) {
+      const esc = Math.max(0.15, OB[oi][2] / 18500000), placas = OB[oi][8] === 'Placas';
+      for (const p of await q.all("SELECT id, nome FROM passos WHERE obraId = ? AND status <> 'Concluído' ORDER BY ordem", o.id)) {
+        if (await q.val('SELECT COUNT(*) FROM passoMateriais WHERE passoId = ?', p.id)) continue;
+        const r = NEC.find(([k]) => p.nome.includes(k)); if (!r) continue;
+        await obras.atualizarPasso(ctx, p.id, { mats: r[1].map(([m, qt]) => ({ matId: matId(m), qtd: Math.max(1, Math.round(qt * (placas ? 0.2 : esc))) })) });
+      }
+    }
+
+    /* mão de obra e serviços previstos em cada passo (parte do orçamento de cada etapa) */
+    const FRAC = { Padrão: [.03, .10, .24, .14, .14, .07, .12, .10, .06], Placas: [.10, .25, .45, .20] };
+    for (const [oi, o] of OBRAS.entries()) { const fr = FRAC[OB[oi][8]], ps = await q.all('SELECT id FROM passos WHERE obraId = ? ORDER BY ordem', o.id); for (const [i, p] of ps.entries()) if (fr[i]) await obras.atualizarPasso(ctx, p.id, { extra: Math.round(OB[oi][2] * fr[i] * 0.85 / 100) * 100 }); }
+
+    /* compras dos últimos 9 meses: pedido -> recebimento com NF -> conta a pagar; o material recebido é consumido pelas obras */
+    const COMPRA = [[1, [[0, 300, 36.9]]], [2, [[1, 120, 58]]], [3, [[2, 40, 118], [3, 30, 132]]], [4, [[5, 2500, 4.9]]], [5, [[6, 60, 72], [7, 12, 289]]], [1, [[0, 260, 36.9]]], [6, [[9, 200, 94]]], [2, [[1, 90, 58]]], [7, [[10, 20, 24], [11, 80, 9.5]]]];
+    for (const [k, [forn, itens]] of COMPRA.entries()) {
+      const m = 9 - k, dataRec = U.addDays(U.addMonths(H, -m), 2); if (dataRec > H) continue;
+      const reaj = 1 + k * 0.006; // reajuste de preço ao longo do ano
+      const pid = await compras.criarPedido(ctx, { fornId: F[forn], parcelas: 1, primeiroVenc: U.addDays(dataRec, 28), itens: itens.map(([mi, qt, pr]) => ({ matId: matId(mi), qtd: qt, precoUnit: Math.round(pr * reaj * 100) / 100 })) });
+      await compras.enviar(ctx, pid); await compras.receber(ctx, pid, { data: dataRec, doc: String(40100 + k * 37) });
+      for (const c of (await fin.listarContas({ pedidoId: pid })).itens) if (c.vencimento <= H) await fin.liquidar(ctx, c.id, { valor: c.valor, data: c.vencimento, forma: 'Boleto' });
+      for (const [j, [mi, qt]] of itens.entries()) {
+        const dataSai = U.addDays(dataRec, 4 + j); if (dataSai > H) continue;
+        const desde = U.diffDays(H, dataSai), oi = [1, 2].find(x => -OB[x][3] >= desde) ?? 0, parte = Math.round(qt * 0.6);
+        await estoque.saida(ctx, { matId: matId(mi), qtd: parte, obraId: OBRAS[oi].id, data: dataSai, doc: 'Requisição ' + (300 + k * 2 + j) });
+        await estoque.saida(ctx, { matId: matId(mi), qtd: qt - parte, obraId: OBRAS[0].id, data: U.addDays(dataSai, 6) > H ? dataSai : U.addDays(dataSai, 6), doc: 'Requisição ' + (301 + k * 2 + j) });
+      }
+    }
+    await estoque.ajuste(ctx, { matId: matId(0), qtd: -12, data: d(-20), motivo: 'Sacos rasgados pela chuva no depósito' });
+    // pedido em rascunho (materiais em falta) e pedido recebido pela metade
+    await compras.criarPedido(ctx, { fornId: F[6], obraId: OBRAS[0].id, parcelas: 2, primeiroVenc: d(30), itens: [{ matId: matId(9), qtd: 600, precoUnit: 96.5 }, { matId: matId(8), qtd: 80, precoUnit: 349 }] });
+    const p3 = await compras.criarPedido(ctx, { fornId: F[5], obraId: OBRAS[1].id, parcelas: 1, primeiroVenc: d(15), itens: [{ matId: matId(7), qtd: 60, precoUnit: 295 }] }); await compras.enviar(ctx, p3);
+    const it3 = await q.one('SELECT id FROM pedidoItens WHERE pedidoId = ?', p3); await compras.receber(ctx, p3, { data: d(-3), doc: '51877', itens: [{ itemId: it3.id, qtd: 30 }] });
+
+    /* custos (pagos) das obras que o histórico acima não cobre: Jardins (concluída), Clube (pausada) e Casas de placas */
+    for (const [oi, meses, valor] of [[4, [11, 10, 9, 8, 7, 6, 5, 4, 3], 760000], [5, [3, 2, 1], 205000], [6, [1, 0], 190000]])
+      for (const m of meses) { const venc = U.addDays(U.addMonths(H, -m), 8); if (venc <= H) await fin.criarContas(ctx, { tipo: 'Pagar', descricao: 'Mão de obra e serviços', valor: valor + m * 4000, vencimento: venc, competencia: venc, catId: 'cat_empreit', obraId: OBRAS[oi].id, jaPago: { data: venc, forma: 'PIX' } }); }
+
+    /* contas a pagar em aberto: vencidas e a vencer */
+    for (const [desc, val, venc, cat, oi] of [['Locação de andaimes', 18400, -6, 'cat_empreit', 0], ['Taxa de aprovação na prefeitura', 7350, -2, 'cat_projetos', 3], ['Seguro de obra (parcela)', 12900, 4, 'cat_projetos', 2], ['Locação de grua', 42000, 6, 'cat_empreit', 1], ['Energia do canteiro', 3870, 9, 'cat_empreit', 0], ['Aluguel do escritório (próximo mês)', 8500, 18, 'cat_adm', null]])
+      await fin.criarContas(ctx, Object.assign({ tipo: 'Pagar', descricao: desc, valor: val, vencimento: d(venc), competencia: d(Math.min(venc, 0)), catId: cat }, oi == null ? {} : { obraId: OBRAS[oi].id }));
+    // receita avulsa recebida todo mês (aluguel de uma sala comercial)
+    for (let m = 5; m >= 0; m--) { const venc = U.addDays(U.addMonths(H, -m), -3); await fin.criarContas(ctx, { tipo: 'Receber', descricao: 'Aluguel de sala comercial', valor: 6200, vencimento: venc, competencia: venc, catId: 'cat_outrasrec', jaPago: { data: venc, forma: 'PIX' } }); }
+
+    /* medição aguardando aprovação */
+    const ctB = await q.one("SELECT id FROM contratos WHERE nome = 'Empreitada de estrutura - Torre B'");
+    await contratos.criarMedicao(ctx, ctB.id, { valorBruto: 460000, data: d(-1), vencimento: d(9), descricao: 'Medição 3 — lajes do 6º ao 8º pavimento' });
+
+    /* documentos com validade (geram alertas quando vencem) */
+    const pdf = t => { const txt = t.normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/[()\\]/g, ''), st = `BT /F1 16 Tf 60 780 Td (${txt}) Tj ET`; return Buffer.from(`%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length ${st.length}>>stream\n${st}\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n${'% conteudo de exemplo\n'.repeat(300 + txt.length * 40)}%%EOF\n`, 'latin1'); };
+    const fornIds = Object.values(F), ctIds = (await q.all('SELECT id FROM contratos ORDER BY criadoEm, id')).map(x => x.id);
+    const DOCS = [['obras', OBRAS[0].id, 'Alvará de construção - Torre A', 'Alvará', 210], ['obras', OBRAS[0].id, 'AVCB - Torre A (bombeiros)', 'Certidão', 22], ['obras', OBRAS[1].id, 'ART de execução da estrutura - Torre B', 'ART/RRT', 300], ['obras', OBRAS[2].id, 'Apólice de seguro de obra - Fase 1', 'Contrato', 45],
+      ['obras', OBRAS[3].id, 'Laudo de sondagem do terreno', 'Laudo', null], ['obras', OBRAS[4].id, 'Licença ambiental de operação - Jardins', 'Alvará', -10], ['obras', OBRAS[6].id, 'Projeto das casas de placas', 'Projeto', null],
+      ['fornecedores', fornIds[0], 'Certidão negativa de débitos - Cimentos Brasil', 'Certidão', 12], ['fornecedores', fornIds[1], 'Certidão negativa de débitos - Aços Paulista', 'Certidão', -4],
+      ['contratos', ctIds[0], 'Contrato assinado - Empreitada de estrutura Torre A', 'Contrato', null], ['empreendimentos', EMP.e1.id, 'Memorial descritivo - Residencial Império Park', 'Projeto', null], ['empreendimentos', EMP.e3.id, 'Registro de incorporação - Torre Business', 'Certidão', 160]];
+    for (const [entidade, entidadeId, nome, tipo, val] of DOCS) await documentos.enviar(ctx, { entidade, entidadeId, nome: nome + '.pdf', tipo, validade: val == null ? '' : d(val) }, pdf(nome + ' (documento de exemplo)'), 'application/pdf');
+
+    /* diário de obra das obras em andamento (dias úteis) */
+    const SERV = { 0: ['Concretagem da laje do 15º pavimento', 'Armação de pilares do 16º pavimento', 'Alvenaria do 9º e 10º pavimentos', 'Instalações elétricas do 6º pavimento', 'Desforma e escoramento'], 1: ['Armação das vigas do 8º pavimento', 'Concretagem de pilares', 'Montagem de fôrmas da laje', 'Impermeabilização do subsolo'],
+      2: ['Revestimento cerâmico das casas 1 a 6', 'Pintura externa das casas 7 a 12', 'Instalação de esquadrias', 'Limpeza e retirada de entulho'], 6: ['Levantamento de placas da casa 3', 'Fundação radier da casa 5', 'Montagem do telhado da casa 2'] };
+    const CLIMA = ['Bom', 'Bom', 'Nublado', 'Bom', 'Chuva leve', 'Bom', 'Chuva forte', 'Nublado'];
+    for (const [oi, lista] of Object.entries(SERV)) {
+      let n = 0;
+      for (let i = 1; i <= 34 && n < 22; i++) {
+        const dia = d(-i), sem = new Date(dia + 'T12:00:00').getDay(); if (sem === 0 || (oi === '0' && i <= 5)) continue;
+        const cl = sem === 6 ? 'Bom' : CLIMA[(i + +oi) % CLIMA.length];
+        await mk('diario', { obraId: OBRAS[oi].id, data: dia, clima: cl, equipe: Math.round((oi === '0' ? 22 : oi === '1' ? 16 : 10) * (sem === 6 ? 0.5 : 1)) + (i % 4), servicos: lista[i % lista.length], ocorrencias: cl === 'Chuva forte' ? 'Serviço externo parado por 3h por causa da chuva' : i % 11 === 0 ? 'Entrega de material atrasou meio dia' : '' });
+        n++;
+      }
+    }
+
+    /* mais tarefas */
+    for (const [titulo, oi, prio, status, prazo] of [['Aprovar medição 3 da Torre B', 1, 'Alta', 'Aberta', 2], ['Renovar AVCB da Torre A', 0, 'Alta', 'Em andamento', 15], ['Cobrar parcelas em atraso de compradores', 0, 'Média', 'Aberta', 4], ['Comprar porcelanato para a Fase 1', 2, 'Alta', 'Aberta', -2],
+      ['Contratar equipe de pintura', 2, 'Média', 'Em andamento', 12], ['Renovar certidão negativa da Aços Paulista', 1, 'Média', 'Aberta', 6], ['Retomar obra do clube', 5, 'Baixa', 'Aberta', 45], ['Entregar casa modelo de placas', 6, 'Média', 'Aberta', 30], ['Treinamento de segurança (NR-18)', 0, 'Média', 'Resolvida', -12]])
+      await mk('tarefas', { titulo, obraId: OBRAS[oi].id, prio, status, prazo: d(prazo) });
     return { ok: true };
   });
 }
