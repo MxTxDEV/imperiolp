@@ -8,8 +8,8 @@ process.env.DATA_DIR = path.join(os.tmpdir(), 'imperio-e2e-' + process.pid);
 const { chromium } = require('playwright');
 const db = require('../../server/db');
 (async () => {
-  db.open(); const auth = require('../../server/auth'); auth.criarUsuario({ user: null }, { nome: 'Admin E2E', email: 'e2e@teste.com', senha: 'SenhaE2E12345', roleId: 'role_admin' });
-  const u = db.q.one('SELECT id FROM users'); require('../../server/seed').carregarExemplo({ user: { id: u.id, nome: 'Admin E2E', permissoes: ['*'] } }); db.close();
+  await db.open(); const auth = require('../../server/auth'); await auth.criarUsuario({ user: null }, { nome: 'Admin E2E', email: 'e2e@teste.com', senha: 'SenhaE2E12345', roleId: 'role_admin' });
+  const u = await db.q.one('SELECT id FROM users'); await require('../../server/seed').carregarExemplo({ user: { id: u.id, nome: 'Admin E2E', permissoes: ['*'] } }); await db.close();
   const { iniciar } = require('../../server/index'); const srv = await iniciar({ port: 0, semBackupAutomatico: true }), URL = 'http://127.0.0.1:' + srv.port + '/';
   const b = await chromium.launch(), erros = [];
   try {

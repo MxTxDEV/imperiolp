@@ -12,6 +12,11 @@ module.exports = {
   // /data é onde o Coolify monta o volume persistente; fora dele usa ./data
   dataDir: process.env.DATA_DIR || (fs.existsSync('/data') ? '/data' : path.join(__dirname, '..', 'data')),
   publicUrl,
+  // PostgreSQL: DATABASE_URL (ex.: postgres://usuario:senha@host:5432/banco). Sem ela, usa PGlite (Postgres embutido) em DATA_DIR/pgdata, só para desenvolvimento.
+  databaseUrl: process.env.DATABASE_URL || '',
+  pgSchema: process.env.PGSCHEMA || '',
+  pgPool: +process.env.PG_POOL || 10,
+  pgSsl: process.env.PGSSL === '1',
   tz: process.env.TZ_EMPRESA || 'America/Sao_Paulo',
   cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === '1' : publicUrl.startsWith('https://'),
   trustProxy: process.env.TRUST_PROXY ? process.env.TRUST_PROXY === '1' : hospedado,   // lê o IP real do cliente do X-Forwarded-For

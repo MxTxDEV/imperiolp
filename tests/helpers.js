@@ -6,7 +6,9 @@ const U = require('../server/util');
 
 /** Sobe o servidor com banco em memória e devolve um cliente HTTP com cookie de sessão por usuário. */
 async function subir() {
-  const srv = await iniciar({ port: 0, dbFile: ':memory:', semBackupAutomatico: true });
+  // Por padrão: Postgres embutido (PGlite) em memória. Com TEST_DATABASE_URL: Postgres de verdade, num schema próprio descartado no fim.
+  const url = process.env.TEST_DATABASE_URL;
+  const srv = await iniciar({ port: 0, dbFile: ':memory:', semBackupAutomatico: true, dbUrl: url, schema: url ? 'teste_' + process.pid + '_' + Math.random().toString(36).slice(2, 6) : undefined });
   const base = 'http://127.0.0.1:' + srv.port;
   const cliente = () => {
     let cookie = '';

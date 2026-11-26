@@ -32,9 +32,9 @@ const ENTIDADES = {
     lista: { cols: ['empId', 'codigo', 'tipo', 'area', 'valorTabela', 'status', 'clienteId'], busca: ['codigo', 'tipo'], ordem: 'codigo' },
     vinculos: [vf('vendas', 'unidadeId', 'Vendas')],
     decorar: itens => require('./services/vendas').decorarUnidades(itens),
-    validar(d, atual) {
+    async validar(d, atual) {
       const e = {};
-      if (!atual && d.empId) { const emp = q.one('SELECT unidadesPrevistas FROM empreendimentos WHERE id = ?', d.empId); const n = q.val('SELECT COUNT(*) FROM unidades WHERE empId = ? AND ativo = 1', d.empId); if (emp && emp.unidadesPrevistas && n >= emp.unidadesPrevistas) e.codigo = `O empreendimento prevê ${emp.unidadesPrevistas} unidades e já tem ${n}. Aumente as unidades previstas antes.`; }
+      if (!atual && d.empId) { const emp = await q.one('SELECT unidadesPrevistas FROM empreendimentos WHERE id = ?', d.empId); const n = await q.val('SELECT COUNT(*) FROM unidades WHERE empId = ? AND ativo = 1', d.empId); if (emp && emp.unidadesPrevistas && n >= emp.unidadesPrevistas) e.codigo = `O empreendimento prevê ${emp.unidadesPrevistas} unidades e já tem ${n}. Aumente as unidades previstas antes.`; }
       if (atual && atual.status !== 'Disponível' && atual.status !== 'Bloqueada' && d.status) e.status = 'Reservada e vendida mudam pelo fluxo de venda.';
       return e;
     },
@@ -72,7 +72,7 @@ const ENTIDADES = {
     lista: { cols: ['nome', 'categoria', 'unidade', 'estoque', 'minimo', 'custoMedio', 'fornId', 'local'], busca: ['nome', 'categoria', 'local'], ordem: 'nome' },
     vinculos: [vf('movimentacoes', 'matId', 'Movimentações'), vf('passoMateriais', 'matId', 'Passos de obra'), vf('pedidoItens', 'matId', 'Pedidos de compra')],
     validar(d) { const e = {}; if (d.estoqueInicial > 0 && !(d.custoInicial > 0)) e.custoInicial = 'Informe o custo unitário do estoque inicial.'; return e; },
-    depois(id, atual, d, virt, ctx) { if (virt.estoqueInicial > 0) require('./services/estoque').ajusteInicial(ctx, id, virt.estoqueInicial, virt.custoInicial); },
+    async depois(id, atual, d, virt, ctx) { if (virt.estoqueInicial > 0) await require('./services/estoque').ajusteInicial(ctx, id, virt.estoqueInicial, virt.custoInicial); },
   },
   funcionarios: {
     prefixo: 'fun', tabela: 'funcionarios', modulo: 'funcionarios', rotulo: 'Funcionário', plural: 'Funcionários', titulo: 'nome', arquivavel: true,
@@ -92,11 +92,11 @@ const ENTIDADES = {
       if (st === 'Desligado' && d.obraId) e.obraId = 'Funcionário desligado não fica alocado em obra.';
       return e;
     },
-    depois(id, atual, d, virt, ctx) {
-      const novo = q.one('SELECT obraId, status, desligamento FROM funcionarios WHERE id = ?', id); const hoje = U.hoje();
-      if (novo.status === 'Desligado' && !novo.desligamento) q.run('UPDATE funcionarios SET desligamento = ? WHERE id = ?', hoje, id);
-      const aberta = q.one('SELECT id, obraId FROM alocacoes WHERE funcId = ? AND ate IS NULL', id);
-      if (!aberta || (aberta.obraId || null) !== (novo.obraId || null)) { if (aberta) q.run('UPDATE alocacoes SET ate = ? WHERE id = ?', hoje, aberta.id); if (novo.obraId) q.run('INSERT INTO alocacoes (funcId, obraId, de) VALUES (?,?,?)', id, novo.obraId, hoje); }
+    async depois(id, atual, d, virt, ctx) {
+      const novo = await q.one('SELECT obraId, status, desligamento FROM funcionarios WHERE id = ?', id); const hoje = U.hoje();
+      if (novo.status === 'Desligado' && !novo.desligamento) await q.run('UPDATE funcionarios SET desligamento = ? WHERE id = ?', hoje, id);
+      const aberta = await q.one('SELECT id, obraId FROM alocacoes WHERE funcId = ? AND ate IS NULL', id);
+      if (!aberta || (aberta.obraId || null) !== (novo.obraId || null)) { if (aberta) await q.run('UPDATE alocacoes SET ate = ? WHERE id = ?', hoje, aberta.id); if (novo.obraId) await q.run('INSERT INTO alocacoes (funcId, obraId, de) VALUES (?,?,?)', id, novo.obraId, hoje); }
     },
   },
   obras: {
@@ -113,7 +113,7 @@ const ENTIDADES = {
     vinculos: [vf('passos', 'obraId', 'Passos'), vf('contratos', 'obraId', 'Contratos'), vf('contas', 'obraId', 'Contas financeiras'), vf('movimentacoes', 'obraId', 'Movimentações de estoque'), vf('funcionarios', 'obraId', 'Funcionários alocados'), vf('tarefas', 'obraId', 'Tarefas'), vf('diario', 'obraId', 'Diário de obra'), vf('pedidos', 'obraId', 'Pedidos de compra'), vf('folhaItens', 'obraId', 'Itens de folha'), vf('alocacoes', 'obraId', 'Histórico de alocações')],
     validar(d) { const e = {}; if (d.inicio && d.previsao && d.previsao < d.inicio) e.previsao = 'A previsão de término não pode ser antes do início.'; return e; },
     decorar: (itens) => require('./services/obras').decorarObras(itens),
-    depois(id, atual, d, virt, ctx) { if (virt.usarModelo) require('./services/obras').modeloPadrao(ctx, id, true); },
+    async depois(id, atual, d, virt, ctx) { if (virt.usarModelo) await require('./services/obras').modeloPadrao(ctx, id, true); },
   },
   contratos: {
     prefixo: 'ctr', tabela: 'contratos', modulo: 'contratos', rotulo: 'Contrato', plural: 'Contratos', titulo: 'nome', arquivavel: true,
@@ -126,7 +126,7 @@ const ENTIDADES = {
     },
     lista: { cols: ['nome', 'obraId', 'empresa', 'tipo', 'status', 'valor', 'inicio', 'fim'], busca: ['nome', 'empresa'], ordem: 'nome' },
     vinculos: [vf('contas', 'contratoId', 'Contas financeiras'), vf('medicoes', 'contratoId', 'Medições')],
-    validar(d, atual) { const e = {}; if (d.inicio && d.fim && d.fim < d.inicio) e.fim = 'O término não pode ser antes do início.'; if (atual && d.valorC !== undefined) { const comp = q.val("SELECT COALESCE(SUM(valorC),0) FROM contas WHERE contratoId = ? AND status = 'Aberta'", atual.id); if (d.valorC < comp) e.valor = `O valor não pode ficar abaixo do que já foi lançado (${U.fromC(comp).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`; } return e; },
+    async validar(d, atual) { const e = {}; if (d.inicio && d.fim && d.fim < d.inicio) e.fim = 'O término não pode ser antes do início.'; if (atual && d.valorC !== undefined) { const comp = await q.val("SELECT COALESCE(SUM(valorC),0) FROM contas WHERE contratoId = ? AND status = 'Aberta'", atual.id); if (d.valorC < comp) e.valor = `O valor não pode ficar abaixo do que já foi lançado (${U.fromC(comp).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`; } return e; },
     decorar: (itens) => require('./services/contratos').decorarContratos(itens),
   },
   tarefas: {

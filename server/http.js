@@ -34,12 +34,14 @@ function enviar(req, res, status, obj, extraHeaders) {
   for (const [k, v] of Object.entries(extraHeaders || {})) res.setHeader(k, v);
   if (body.length > 1024 && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) { res.setHeader('Content-Encoding', 'gzip'); res.end(zlib.gzipSync(body)); } else res.end(body);
 }
-function erroSqlite(e) {
-  const m = String(e.message || '');
-  if (/UNIQUE constraint failed/.test(m)) return new HttpError(409, 'Já existe um registro com este valor (nome, documento ou código repetido).');
-  if (/FOREIGN KEY constraint failed/.test(m)) return new HttpError(409, 'Este registro está ligado a outros e não pode ser alterado ou removido assim.');
-  if (/CHECK constraint failed/.test(m)) return new HttpError(422, 'Valor fora do permitido: ' + m.replace(/^.*CHECK constraint failed: ?/, ''));
-  if (/NOT NULL constraint failed/.test(m)) return new HttpError(422, 'Campo obrigatório vazio: ' + m.replace(/^.*failed: ?/, ''));
+function erroSql(e) {   // traduz erros do PostgreSQL (pelo código SQLSTATE) em mensagens para o usuário
+  const c = e && e.code, m = String(e && e.message || '');
+  if (c === '23505') return new HttpError(409, 'Já existe um registro com este valor (nome, documento ou código repetido).');
+  if (c === '23503') return new HttpError(409, 'Este registro está ligado a outros e não pode ser alterado ou removido assim.');
+  if (c === '23514') return new HttpError(422, 'Valor fora do permitido' + (e.constraint ? ' (' + e.constraint + ')' : '') + '.');
+  if (c === '23502') return new HttpError(422, 'Campo obrigatório vazio' + (e.column ? ': ' + e.column : '') + '.');
+  if (c === '22P02' || c === '22003' || c === '22001') return new HttpError(422, 'Valor inválido ou grande demais.');
+  if (/duplicate key value|violates foreign key|violates check|violates not-null/.test(m)) return erroSql({ code: /duplicate/.test(m) ? '23505' : /foreign/.test(m) ? '23503' : /check/.test(m) ? '23514' : '23502' });
   return null;
 }
 function servirEstatico(req, res, urlPath) {
@@ -58,7 +60,7 @@ async function atender(req, res) {
   const ip = cfg.trustProxy ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || remoto : remoto;
   try {
     if (!u.pathname.startsWith('/api/')) { if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Método não permitido.'); return servirEstatico(req, res, u.pathname); }
-    if (u.pathname === '/api/saude' && req.method === 'GET') { require('./db').q.val('SELECT 1'); return enviar(req, res, 200, { ok: true, versao: require('../package.json').version }); }   // para o healthcheck do Coolify
+    if (u.pathname === '/api/saude' && req.method === 'GET') { await require('./db').q.val('SELECT 1'); return enviar(req, res, 200, { ok: true, versao: require('../package.json').version }); }   // para o healthcheck do Coolify
     const r = routes.find(x => x.method === req.method && x.re.test(u.pathname));
     if (!r) { const outro = routes.some(x => x.re.test(u.pathname)); throw new HttpError(outro ? 405 : 404, outro ? 'Método não permitido.' : 'Rota não encontrada.'); }
     const m = u.pathname.match(r.re); const params = {}; r.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1]); });
@@ -67,7 +69,7 @@ async function atender(req, res) {
       const o = req.headers.origin; if (o) { let h = ''; try { h = new URL(o).host; } catch (_) { /* origem inválida */ } const ok = [req.headers.host, cfg.trustProxy && req.headers['x-forwarded-host'], cfg.publicUrl && new URL(cfg.publicUrl).host].filter(Boolean); if (!ok.includes(h)) throw new HttpError(403, 'Origem não permitida.'); }
     }
     const ctx = { req, res, params, query: Object.fromEntries(u.searchParams), ip, body: null, rawBody: null, user: null };
-    if (!r.opts.publica) { ctx.user = auth.autenticar(req); if (!ctx.user) throw new HttpError(401, 'Sessão expirada. Entre de novo.'); }
+    if (!r.opts.publica) { ctx.user = await auth.autenticar(req); if (!ctx.user) throw new HttpError(401, 'Sessão expirada. Entre de novo.'); }
     if (ctx.user && ctx.user.senhaTemp && !r.opts.semTroca) throw new HttpError(403, 'Troque a senha temporária para continuar.', { trocarSenha: true });
     if (r.opts.perm) { const keys = [].concat(typeof r.opts.perm === 'function' ? r.opts.perm(ctx) : r.opts.perm); if (!keys.every(k => can(ctx.user, k))) throw forbidden(); }
     if (req.method !== 'GET' && req.method !== 'DELETE') {
@@ -81,10 +83,10 @@ async function atender(req, res) {
     else enviar(req, res, 200, out === undefined ? { ok: true } : out);
     if (req.method !== 'GET') log.info('req', { m: req.method, p: u.pathname, ms: Date.now() - t0, u: ctx.user && ctx.user.id });
   } catch (e0) {
-    const e = e0 instanceof HttpError ? e0 : (erroSqlite(e0) || e0);
+    const e = e0 instanceof HttpError ? e0 : (erroSql(e0) || e0);
     if (e instanceof HttpError) { if (e.status >= 500) log.error(e.message, { p: u.pathname }); enviar(req, res, e.status, Object.assign({ erro: e.message }, e.extra)); }
     else { const ref = Math.random().toString(36).slice(2, 8); log.error('falha não prevista', { ref, p: u.pathname, m: req.method, stack: String(e.stack || e).slice(0, 1500) }); enviar(req, res, 500, { erro: 'Erro interno. Informe o código ' + ref + ' ao administrador.' }); }
   }
 }
-function criarServidor() { return http.createServer((req, res) => { atender(req, res); }); }
+function criarServidor() { return http.createServer((req, res) => { atender(req, res).catch(e => { log.error('falha geral', { erro: String(e && e.stack || e) }); try { res.statusCode = 500; res.end(); } catch (_) { /* socket fechado */ } }); }); }
 module.exports = { route, criarServidor, routes };

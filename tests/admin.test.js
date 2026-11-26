@@ -31,7 +31,7 @@ test('backup: exportar, restaurar e auditoria', async t => {
   await t.test('exporta tudo e a restauração devolve exatamente o estado anterior', async () => {
     bak = (await admin.get('/api/backup/exportar')).dados; assert.equal(bak.formato, 'imperio-backup'); assert.ok(bak.tabelas.materiais.length >= 2);
     await ok(admin.post('/api/estoque/saida', { matId: M.cim, qtd: 4, obraId: M.obra })); await ok(admin.post('/api/fornecedores', { nome: 'Criado depois do backup' }));
-    const r = await ok(admin.f('POST', '/api/backup/importar', Buffer.from(JSON.stringify(bak)))); assert.ok(r.snapshot); assert.equal((await admin.get('/api/obras')).status, 401, 'a restauração encerra as sessões'); await ok(admin.post('/api/auth/login', { email: 'admin@teste.com', senha: 'SenhaForte123' }));
+    const r = await ok(admin.f('POST', '/api/backup/importar', require('zlib').gzipSync(Buffer.from(JSON.stringify(bak))))); assert.ok(r.snapshot); assert.equal((await admin.get('/api/obras')).status, 401, 'a restauração encerra as sessões'); await ok(admin.post('/api/auth/login', { email: 'admin@teste.com', senha: 'SenhaForte123' }));
     assert.equal((await admin.get('/api/materiais/' + M.cim)).dados.estoque, 10); assert.equal((await admin.get('/api/fornecedores')).dados.itens.some(f => f.nome === 'Criado depois do backup'), false);
   });
   await t.test('backup inválido ou adulterado não muda nada', async () => {

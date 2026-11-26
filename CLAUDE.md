@@ -14,8 +14,9 @@ Antes de atender **qualquer** pedido neste repositório, consulte o Segundo Cér
 
 ## Projeto
 
-- Servidor **Node 22 + SQLite** (`node:sqlite`, sem dependências) e interface em HTML/CSS/JS puro, multiusuário com perfis de acesso.
-- Rodar: `npm start` (http://127.0.0.1:3000). Testar: `npm test` (78 testes) e `npm run test:e2e`.
+- Servidor **Node 22 + PostgreSQL** (driver `pg`; `DATABASE_URL`; PGlite embutido só em dev/testes) e interface em HTML/CSS/JS puro, multiusuário com perfis de acesso.
+- Todo acesso ao banco é **assíncrono** (`await q.all/one/run/val`, `await tx(async () => ...)`): esquecer o `await` é bug silencioso. SQL com `?`/`@nome`, nomes camelCase sem aspas (o `db.js` cuida).
+- Rodar: `npm start` (http://127.0.0.1:3000). Testar: `npm test` (81 testes; `TEST_DATABASE_URL` roda no Postgres real) e `npm run test:e2e`.
 - Servidor em `server/` (rotas em `routes.js`, regras em `server/services/*`, cadastros declarados em `entities.js`, migrações em `server/migrations/`).
   Interface em `public/` (`core.js` núcleo, `pages.js`/`pages2.js`/`admin.js` telas, `bi.js` painel, `fin.js` financeiro, `holo.js` holograma).
 - Regras que não se quebram: totais sempre derivados (nunca coluna), dinheiro em centavos, estorno em vez de apagar, status da obra derivado dos passos,
