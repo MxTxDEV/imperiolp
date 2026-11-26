@@ -14,7 +14,14 @@ const db = require('../../server/db');
   const b = await chromium.launch(), erros = [];
   try {
     const p = await (await b.newContext({ viewport: { width: 1440, height: 900 }, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' })).newPage(); p.on('pageerror', e => erros.push(e.message));
-    await p.goto(URL); await p.waitForSelector('#fl'); await p.fill('input[name=email]', 'e2e@teste.com'); await p.fill('input[name=senha]', 'SenhaE2E12345'); await p.click('#fl button'); await p.waitForSelector('#nav a');
+    await p.goto(URL); await p.waitForSelector('#fl');
+    /* tela de acesso: marca carregada, mostrar/ocultar senha, aviso de credencial errada sem travar o botão */
+    assert.ok(await p.evaluate(() => [...document.images].length >= 2 && [...document.images].every(i => i.complete && i.naturalWidth > 0)), 'logo da tela de login carregada');
+    await p.fill('input[name=email]', 'e2e@teste.com'); await p.fill('input[name=senha]', 'errada12345');
+    assert.equal(await p.getAttribute('input[name=senha]', 'type'), 'password'); await p.click('.pw-t'); assert.equal(await p.getAttribute('input[name=senha]', 'type'), 'text'); await p.click('.pw-t');
+    await p.click('#fl button.btn'); await p.waitForFunction(() => document.querySelector('#fe') && document.querySelector('#fe').textContent.length > 0);
+    assert.ok(await p.evaluate(() => !document.querySelector('#fl button.btn').disabled && document.activeElement.name === 'senha'), 'credencial errada: botão destravado e foco na senha');
+    await p.fill('input[name=senha]', 'SenhaE2E12345'); await p.click('#fl button.btn'); await p.waitForSelector('#nav a');
     const ir = async h => { await p.evaluate(h => { location.hash = '#/' + h; }, h); await p.waitForTimeout(700); };
     for (const h of ['dashboard', 'obras', 'andamento', 'empreendimentos', 'vendas', 'estoque', 'compras', 'contratos', 'contas', 'financeiro', 'folha', 'funcionarios', 'fornecedores', 'tarefas', 'diario', 'documentos', 'admin']) { await ir(h); assert.ok((await p.locator('#view').innerText()).length > 40, 'tela vazia: ' + h); }
     await ir('obras'); await p.click('[data-act=new][data-k=obras]'); await p.fill('input[name=nome]', 'Obra E2E'); await p.fill('input[name=inicio]', '2026-12-01'); await p.fill('input[name=previsao]', '2026-01-01'); await p.click('#frmOk'); await p.waitForTimeout(500);

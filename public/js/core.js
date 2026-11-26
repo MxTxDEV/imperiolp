@@ -224,18 +224,44 @@ setInterval(async () => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) recarregarETela(); });
 
 /* ---------- acesso: configuração inicial, login, troca de senha ---------- */
-function tela(html) { $('.app').hidden = true; const a = $('#auth'); a.hidden = false; a.innerHTML = `<div class="auth-box"><img class="logo" src="img/logo.png" alt="Império Negócios Imobiliários" width="88" height="88">${html}</div>`; const f = a.querySelector('input'); if (f) f.focus(); }
+const SVG_SKY = '<svg class="ab-sky" viewBox="0 0 800 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false"><g fill="currentColor"><rect x="20" y="120" width="60" height="100"/><rect x="95" y="70" width="50" height="150"/><rect x="160" y="110" width="70" height="110"/><rect x="245" y="40" width="56" height="180"/><rect x="316" y="95" width="46" height="125"/><rect x="378" y="60" width="64" height="160"/><rect x="458" y="125" width="54" height="95"/><rect x="528" y="30" width="48" height="190"/><rect x="592" y="85" width="62" height="135"/><rect x="670" y="115" width="50" height="105"/><rect x="735" y="75" width="45" height="145"/></g></svg>';
+const LOGIN_ITENS = [['🏗️', 'Obras e andamento', 'passos, custo e holograma em tempo real'], ['📦', 'Estoque, compras e contratos', 'tudo ligado ao custo da obra'], ['💰', 'Financeiro e vendas', 'contas, baixas, parcelas e unidades'], ['📊', 'Painel de inteligência', 'indicadores para decidir com segurança']];
+function tela(html) {
+  $('.app').hidden = true; $('#fab').hidden = true; const a = $('#auth'); a.hidden = false;
+  a.innerHTML = `<div class="auth-wrap">
+    <section class="auth-brand"><div class="ab-glow"></div>${SVG_SKY}
+      <img class="ab-logo" src="img/logo.png" alt="Império Negócios Imobiliários" width="720" height="566">
+      <h2>Sua operação inteira,<br><span>sob o seu comando.</span></h2>
+      <ul class="ab-list">${LOGIN_ITENS.map(x => `<li><i aria-hidden="true">${x[0]}</i><div><b>${x[1]}</b><small>${x[2]}</small></div></li>`).join('')}</ul>
+      <small class="ab-foot">Império ERP · acesso restrito a usuários autorizados</small>
+    </section>
+    <section class="auth-pane">
+      <button class="icon-btn auth-tema" id="authTema" type="button" aria-label="Alternar tema claro e escuro">🌗</button>
+      <div class="auth-box"><img class="ab-logo-m" src="img/logo.png" alt="Império Negócios Imobiliários" width="720" height="566">${html}</div>
+    </section></div>`;
+  $('#authTema').onclick = () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; try { localStorage.setItem('imperio_theme', t); } catch (e) { /* ignora */ } };
+  a.querySelectorAll('input[type=password]').forEach(inp => {   // mostrar/ocultar senha + aviso de Caps Lock
+    const w = document.createElement('span'); w.className = 'pw'; inp.parentNode.insertBefore(w, inp); w.appendChild(inp);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'pw-t'; b.setAttribute('aria-label', 'Mostrar senha'); b.setAttribute('aria-pressed', 'false'); b.textContent = '👁'; w.appendChild(b);
+    const caps = document.createElement('small'); caps.className = 'caps'; caps.hidden = true; caps.textContent = '⇪ Caps Lock está ligado'; inp.closest('label').appendChild(caps);
+    b.onclick = () => { const ver = inp.type === 'password'; inp.type = ver ? 'text' : 'password'; b.setAttribute('aria-pressed', ver); b.setAttribute('aria-label', ver ? 'Ocultar senha' : 'Mostrar senha'); b.textContent = ver ? '🙈' : '👁'; inp.focus(); };
+    const cl = e => { caps.hidden = !(e.getModifierState && e.getModifierState('CapsLock')); }; inp.addEventListener('keydown', cl); inp.addEventListener('keyup', cl); inp.addEventListener('blur', () => { caps.hidden = true; });
+  });
+  const f = a.querySelector('input'); if (f) f.focus();
+}
+/** Envia o formulário de acesso com o botão em "aguarde", sem permitir duplo clique. */
+async function enviarAcesso(f, fn) { const b = f.querySelector('button.btn'), t = b.textContent; b.disabled = true; b.classList.add('load'); b.textContent = 'Aguarde…'; try { await fn(); } finally { if (b.isConnected) { b.disabled = false; b.classList.remove('load'); b.textContent = t; } } }
 function telaLogin(msg) {
-  tela(`<h1>Império ERP</h1><p class="mut">Entre com o seu e-mail e senha.</p>${msg ? `<p class="err-box" role="alert">${esc(msg)}</p>` : ''}<form id="fl" class="form" novalidate><label class="full">E-mail<input name="email" type="email" autocomplete="username" required></label><label class="full">Senha<input name="senha" type="password" autocomplete="current-password" required></label><span class="err" id="fe" role="alert"></span><button class="btn full">Entrar</button></form>`);
-  $('#fl').onsubmit = async e => { e.preventDefault(); const f = e.target; try { await API.silencioso('POST', '/api/auth/login', { email: f.email.value, senha: f.senha.value }); await iniciar(); } catch (er) { $('#fe').textContent = er.message; } };
+  tela(`<h1>Bem-vindo de volta</h1><p class="mut">Entre com o seu e-mail e senha para acessar o Império ERP.</p>${msg ? `<p class="err-box" role="alert">${esc(msg)}</p>` : ''}<form id="fl" class="form" novalidate><label class="full">E-mail<input name="email" type="email" autocomplete="username" required></label><label class="full">Senha<input name="senha" type="password" autocomplete="current-password" required></label><span class="err" id="fe" role="alert"></span><button class="btn full">Entrar</button></form>`);
+  $('#fl').onsubmit = e => { e.preventDefault(); const f = e.target; enviarAcesso(f, async () => { try { await API.silencioso('POST', '/api/auth/login', { email: f.email.value, senha: f.senha.value }); await iniciar(); } catch (er) { $('#fe').textContent = er.message; f.senha.value = ''; f.senha.focus(); } }); };
 }
 function telaSetup() {
   tela(`<h1>Bem-vindo ao Império ERP</h1><p class="mut">Crie o primeiro usuário, o administrador. Você poderá criar os outros usuários e perfis depois.</p><form id="fl" class="form" novalidate><label class="full">Seu nome<input name="nome" required></label><label class="full">E-mail<input name="email" type="email" autocomplete="username" required></label><label class="full">Senha <small class="mut">(mínimo 10 caracteres, com letras e números)</small><input name="senha" type="password" autocomplete="new-password" required></label><span class="err" id="fe" role="alert"></span><button class="btn full">Criar administrador e entrar</button></form>`);
-  $('#fl').onsubmit = async e => { e.preventDefault(); const f = e.target; try { await API.silencioso('POST', '/api/auth/setup', { nome: f.nome.value, email: f.email.value, senha: f.senha.value }); await iniciar(); } catch (er) { $('#fe').textContent = Object.values(er.erros || {}).join(' ') || er.message; } };
+  $('#fl').onsubmit = e => { e.preventDefault(); const f = e.target; enviarAcesso(f, async () => { try { await API.silencioso('POST', '/api/auth/setup', { nome: f.nome.value, email: f.email.value, senha: f.senha.value }); await iniciar(); } catch (er) { $('#fe').textContent = Object.values(er.erros || {}).join(' ') || er.message; } }); };
 }
 function telaTroca() {
   tela(`<h1>Defina uma nova senha</h1><p class="mut">A sua senha atual é temporária. Escolha uma nova para continuar.</p><form id="fl" class="form" novalidate><label class="full">Senha atual<input name="atual" type="password" autocomplete="current-password" required></label><label class="full">Nova senha <small class="mut">(mínimo 10, letras e números)</small><input name="nova" type="password" autocomplete="new-password" required></label><span class="err" id="fe" role="alert"></span><button class="btn full">Salvar e entrar</button></form>`);
-  $('#fl').onsubmit = async e => { e.preventDefault(); const f = e.target; try { await API.silencioso('POST', '/api/auth/senha', { atual: f.atual.value, nova: f.nova.value }); await iniciar(); } catch (er) { $('#fe').textContent = Object.values(er.erros || {}).join(' ') || er.message; } };
+  $('#fl').onsubmit = e => { e.preventDefault(); const f = e.target; enviarAcesso(f, async () => { try { await API.silencioso('POST', '/api/auth/senha', { atual: f.atual.value, nova: f.nova.value }); await iniciar(); } catch (er) { $('#fe').textContent = Object.values(er.erros || {}).join(' ') || er.message; } }); };
 }
 APP.aoSairDaSessao = () => { if (APP.ME) { APP.ME = null; APP.S = null; telaLogin('Sua sessão expirou. Entre de novo.'); } };
 function minhaConta() {
@@ -249,7 +275,7 @@ async function iniciar() {
   let est; try { est = await API.silencioso('GET', '/api/auth/estado'); } catch (e) { tela(`<h1>Servidor indisponível</h1><p class="mut">${esc(e.message)}</p><button class="btn" id="recarregar">Tentar de novo</button>`); $('#recarregar').onclick = () => location.reload(); return; }
   if (est.precisaSetup) return telaSetup(); if (!est.usuario) return telaLogin(); if (est.usuario.senhaTemp) return telaTroca();
   APP.ME = est.usuario; APP.META = await API.get('/api/meta'); await reload();
-  $('#auth').hidden = true; $('#auth').innerHTML = ''; $('.app').hidden = false; $('#uNome').textContent = APP.ME.nome; $('#uPerfil').textContent = APP.ME.perfil; $('#uIni').textContent = initials(APP.ME.nome);
+  $('#auth').hidden = true; $('#auth').innerHTML = ''; $('.app').hidden = false; $('#fab').hidden = false; $('#uNome').textContent = APP.ME.nome; $('#uPerfil').textContent = APP.ME.perfil; $('#uIni').textContent = initials(APP.ME.nome);
   if (!location.hash) location.hash = '#/' + route(); render();
 }
 APP.iniciar = iniciar; APP.NAV = NAV;

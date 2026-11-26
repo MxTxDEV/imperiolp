@@ -22,7 +22,7 @@ function quick() {
   modal('⚡ Ação rápida', `<div class="grid" style="grid-template-columns:1fr 1fr">${itens.map((x, i) => `<button class="btn ghost" data-q="${i}" style="padding:16px;text-align:left">${x[0]} ${x[1]}</button>`).join('')}</div>`);
   document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { closeModal(); itens[+b.dataset.q][2](); });
 }
-$('#btnQuick').onclick = quick; $('#fab').onclick = quick; $('#fab').hidden = false;
+$('#btnQuick').onclick = quick; $('#fab').onclick = quick;
 $('#btnMenu').onclick = () => APP.menu();
 $('#scrim').onclick = () => APP.menu(false);   // tocar fora fecha
 $('#nav').addEventListener('click', e => { if (e.target.closest('a')) APP.menu(false); });   // escolher a página (mesmo a atual) fecha
@@ -33,6 +33,6 @@ const setPin = v => { pinned = v; document.querySelector('.app').classList.toggl
 setPin(pinned); $('#btnPin').onclick = () => setPin(!pinned);
 let theme = 'dark'; try { theme = localStorage.getItem('imperio_theme') || 'dark'; } catch (e) { /* ignora */ }
 document.documentElement.dataset.theme = theme;
-$('#btnTheme').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('imperio_theme', theme); } catch (e) { /* ignora */ } };
+$('#btnTheme').onclick = () => { theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('imperio_theme', theme); } catch (e) { /* ignora */ } };
 APP.iniciar();
 })();
