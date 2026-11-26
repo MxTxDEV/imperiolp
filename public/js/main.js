@@ -23,7 +23,11 @@ function quick() {
   document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { closeModal(); itens[+b.dataset.q][2](); });
 }
 $('#btnQuick').onclick = quick; $('#fab').onclick = quick; $('#fab').hidden = false;
-$('#btnMenu').onclick = () => $('#side').classList.toggle('open');
+$('#btnMenu').onclick = () => APP.menu();
+$('#scrim').onclick = () => APP.menu(false);   // tocar fora fecha
+$('#nav').addEventListener('click', e => { if (e.target.closest('a')) APP.menu(false); });   // escolher a página (mesmo a atual) fecha
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#side').classList.contains('open')) { APP.menu(false); $('#btnMenu').focus(); } });
+window.matchMedia('(min-width:981px)').addEventListener('change', e => { if (e.matches) APP.menu(false); });
 let pinned = false; try { pinned = localStorage.getItem('imperio_pin') === '1'; } catch (e) { /* sem armazenamento */ }
 const setPin = v => { pinned = v; document.querySelector('.app').classList.toggle('pinned', v); $('#btnPin').setAttribute('aria-pressed', v); $('#btnPin').title = v ? 'Recolher menu' : 'Fixar menu aberto'; try { localStorage.setItem('imperio_pin', v ? '1' : '0'); } catch (e) { /* ignora */ } };
 setPin(pinned); $('#btnPin').onclick = () => setPin(!pinned);

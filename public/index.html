@@ -14,14 +14,15 @@
 <body>
 <div id="auth" class="auth" hidden></div>
 <div class="app" hidden>
-  <aside class="side" id="side">
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
+  <aside class="side" id="side" aria-label="Menu principal">
     <div class="brand"><div class="logo">I</div><div class="lbl"><b>Império</b><small>Negócios Imobiliários</small></div><button class="pin lbl" id="btnPin" aria-pressed="false" title="Fixar menu aberto">📌</button></div>
-    <nav id="nav"></nav>
+    <nav id="nav" aria-label="Páginas"></nav>
     <div class="side-foot"><small class="lbl">Dados salvos no servidor</small></div>
   </aside>
   <div class="main">
     <header class="top">
-      <button class="icon-btn menu" id="btnMenu" aria-label="Menu">☰</button>
+      <button class="icon-btn menu" id="btnMenu" aria-label="Menu" aria-controls="side" aria-expanded="false">☰</button>
       <div class="search"><span>🔍</span><input id="q" placeholder="Buscar em tudo nesta tela..." autocomplete="off"></div>
       <div class="top-r">
         <button class="btn sm" id="btnQuick">+ Ação rápida</button>

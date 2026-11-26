@@ -22,6 +22,21 @@ const db = require('../../server/db');
     await ir('estoque'); await p.click('[data-act=mov][data-v=Entrada] >> nth=0'); await p.fill('input[name=qtd]', '5'); await p.fill('input[name=precoUnit]', ''); await p.click('#frmOk'); await p.waitForTimeout(400);
     assert.ok((await p.locator('[data-err=precoUnit]').innerText()).length > 5, 'entrada exige preço'); await p.keyboard.press('Escape');
     await ir('contas'); await p.locator('[data-act=cBaixa]').first().click(); await p.click('#frmOk'); await p.waitForTimeout(700); assert.match(await p.locator('#toast').innerText(), /Baixa registrada/);
-    assert.equal(erros.length, 0, 'erros de JS: ' + erros.join(' | ')); console.log('E2E ok: 17 telas, validação inline, estoque e baixa de conta.');
+    /* sidebar: rolagem própria sem horizontal, posição preservada, dourado na página ativa, foco visível e menu do celular */
+    await p.setViewportSize({ width: 1280, height: 460 }); await ir('obras');
+    const sb = await p.evaluate(() => { const n = document.querySelector('#nav'), a = n.querySelector('a.on'); return { v: n.scrollHeight > n.clientHeight, h: n.scrollWidth <= n.clientWidth, ouro: /212, 168, 75/.test(getComputedStyle(a).boxShadow) }; });
+    assert.ok(sb.v && sb.h && sb.ouro, 'sidebar: rolagem vertical, sem horizontal e página ativa dourada ' + JSON.stringify(sb));
+    await p.evaluate(() => { document.querySelector('#nav').scrollTop = 80; window.scrollTo(0, 60); }); await p.mouse.move(60, 250); await p.mouse.wheel(0, 2000); await p.waitForTimeout(150);
+    assert.equal(await p.evaluate(() => scrollY), 60, 'rolar o menu não pode mover a página');
+    await p.evaluate(() => { document.querySelector('#nav').scrollTop = 90; APP.render(); }); await p.waitForTimeout(200);
+    assert.equal(await p.evaluate(() => document.querySelector('#nav').scrollTop), 90, 'a posição do menu sobrevive à atualização da tela');
+    await p.focus('#btnPin'); await p.keyboard.press('Tab');
+    assert.ok(await p.evaluate(() => { const c = getComputedStyle(document.activeElement); return document.activeElement.matches('#nav a') && c.outlineStyle === 'solid' && parseFloat(c.outlineWidth) >= 2; }), 'foco do teclado visível no menu');
+    await p.setViewportSize({ width: 390, height: 700 }); await p.waitForTimeout(300);
+    await p.click('#btnMenu'); await p.waitForTimeout(400); assert.ok(await p.evaluate(() => document.querySelector('#side').classList.contains('open')), 'menu abre no celular');
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300); assert.ok(await p.evaluate(() => !document.querySelector('#side').classList.contains('open')), 'Esc fecha o menu');
+    await p.click('#btnMenu'); await p.waitForTimeout(400); await p.mouse.click(380, 300); await p.waitForTimeout(300); assert.ok(await p.evaluate(() => !document.querySelector('#side').classList.contains('open')), 'tocar fora fecha o menu');
+    await p.click('#btnMenu'); await p.waitForTimeout(400); await p.click('#nav a[href="#/estoque"]'); await p.waitForTimeout(500); assert.ok(await p.evaluate(() => !document.querySelector('#side').classList.contains('open')), 'escolher a página fecha o menu');
+    assert.equal(erros.length, 0, 'erros de JS: ' + erros.join(' | ')); console.log('E2E ok: 17 telas, validação inline, estoque, baixa de conta e sidebar.');
   } finally { await b.close(); await srv.close(); require('fs').rmSync(process.env.DATA_DIR, { recursive: true, force: true }); }
 })().catch(e => { console.error('E2E falhou:', e.message); process.exit(1); });

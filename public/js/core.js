@@ -195,7 +195,10 @@ let tokenRender = 0;
 function render() {
   if (!APP.ME || !APP.S) return; const r = route(), tk = ++tokenRender, nav = NAV.filter(visivel), view = $('#view');
   const lowN = APP.S.materiais.filter(low).length, vencN = APP.alertas.filter(a => a.mod === 'financeiro' && /vencida/.test(a.t)).length, tarN = APP.S.tarefas.filter(t => t.status !== 'Resolvida').length;
-  $('#nav').innerHTML = nav.map(([k, i, l]) => `<a href="#/${k}" class="${k === r ? 'on' : ''}" title="${l}"${k === r ? ' aria-current="page"' : ''}><i>${i}</i><span class="lbl">${l}</span>${k === 'estoque' && lowN ? `<em>${lowN}</em>` : ''}${k === 'contas' && vencN ? `<em>${vencN}</em>` : ''}${k === 'tarefas' && tarN ? `<em style="background:var(--blue)">${tarN}</em>` : ''}</a>`).join('');
+  const navEl = $('#nav'), navTop = navEl.scrollTop;
+  navEl.innerHTML = nav.map(([k, i, l]) => `<a href="#/${k}" class="${k === r ? 'on' : ''}" title="${l}"${k === r ? ' aria-current="page"' : ''}><i>${i}</i><span class="lbl">${l}</span>${k === 'estoque' && lowN ? `<em>${lowN}</em>` : ''}${k === 'contas' && vencN ? `<em>${vencN}</em>` : ''}${k === 'tarefas' && tarN ? `<em style="background:var(--blue)">${tarN}</em>` : ''}</a>`).join('');
+  navEl.scrollTop = navTop;   // a posição do menu sobrevive à atualização da tela
+  if (APP.navRota !== r) { APP.navRota = r; const on = navEl.querySelector('a.on'); if (on && (on.offsetTop < navEl.scrollTop || on.offsetTop + on.offsetHeight > navEl.scrollTop + navEl.clientHeight)) navEl.scrollTop = Math.max(0, on.offsetTop - (navEl.clientHeight - on.offsetHeight) / 2); }   // página ativa fora da área visível: traz para o meio
   $('.search').style.visibility = SEM_BUSCA.has(r) ? 'hidden' : 'visible';
   const pos = () => { if (tk !== tokenRender) return; const n = APP.alertas.length; $('#bellN').textContent = n; $('#bellN').style.display = n ? '' : 'none'; APP.hooks.forEach(h => h()); document.title = 'Império ERP | ' + ((NAV.find(x => x[0] === r) || [])[2] || ''); };
   const out = APP.pages[r]();
@@ -204,7 +207,13 @@ function render() {
 }
 APP.render = render;
 async function recarregarETela() { if (!APP.ME) return; try { await reload(); render(); } catch (e) { falha(e); } }
-window.addEventListener('hashchange', () => { APP.state.q = ''; $('#q').value = ''; $('#side').classList.remove('open'); window.scrollTo(0, 0); render(); });
+/** Abre/fecha o menu no celular (também liga o fundo escurecido, o aria-expanded e trava a rolagem da página enquanto aberto). */
+APP.menu = abrir => {
+  const s = $('#side'); abrir = abrir === undefined ? !s.classList.contains('open') : !!abrir;
+  s.classList.toggle('open', abrir); $('#scrim').classList.toggle('on', abrir); document.body.classList.toggle('menu-aberto', abrir); $('#btnMenu').setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  if (abrir) requestAnimationFrame(() => { const a = $('#nav a.on') || $('#nav a'); if (a) a.focus({ preventScroll: true }); });
+};
+window.addEventListener('hashchange', () => { APP.state.q = ''; $('#q').value = ''; APP.menu(false); window.scrollTo(0, 0); render(); });
 $('#q').addEventListener('input', debounce(e => { APP.state.q = e.target.value; Object.values(LS).forEach(s => { s.pagina = 1; }); render(); }, 280));
 
 /* atualização automática quando outra pessoa altera algo */
