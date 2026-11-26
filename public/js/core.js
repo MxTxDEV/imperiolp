@@ -224,7 +224,7 @@ setInterval(async () => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) recarregarETela(); });
 
 /* ---------- acesso: configuração inicial, login, troca de senha ---------- */
-function tela(html) { $('.app').hidden = true; const a = $('#auth'); a.hidden = false; a.innerHTML = `<div class="auth-box"><div class="logo">I</div>${html}</div>`; const f = a.querySelector('input'); if (f) f.focus(); }
+function tela(html) { $('.app').hidden = true; const a = $('#auth'); a.hidden = false; a.innerHTML = `<div class="auth-box"><img class="logo" src="img/logo.png" alt="Império Negócios Imobiliários" width="88" height="88">${html}</div>`; const f = a.querySelector('input'); if (f) f.focus(); }
 function telaLogin(msg) {
   tela(`<h1>Império ERP</h1><p class="mut">Entre com o seu e-mail e senha.</p>${msg ? `<p class="err-box" role="alert">${esc(msg)}</p>` : ''}<form id="fl" class="form" novalidate><label class="full">E-mail<input name="email" type="email" autocomplete="username" required></label><label class="full">Senha<input name="senha" type="password" autocomplete="current-password" required></label><span class="err" id="fe" role="alert"></span><button class="btn full">Entrar</button></form>`);
   $('#fl').onsubmit = async e => { e.preventDefault(); const f = e.target; try { await API.silencioso('POST', '/api/auth/login', { email: f.email.value, senha: f.senha.value }); await iniciar(); } catch (er) { $('#fe').textContent = er.message; } };

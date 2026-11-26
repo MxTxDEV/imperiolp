@@ -345,3 +345,12 @@ tbody tr:hover{background:var(--panel2);box-shadow:inset 3px 0 0 var(--gold)}
   body.menu-aberto{overflow:hidden}
 }
 @media(prefers-reduced-motion:reduce){.side,.scrim{transition:none!important}}
+
+/* logo da marca (imagem circular) */
+img.logo{display:block;flex:none;width:42px;height:42px;border-radius:50%;object-fit:cover;background:#000;box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 45%,transparent)}
+.auth-box img.logo{width:88px;height:88px;margin:0 auto 16px;box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 45%,transparent),0 10px 30px rgba(0,0,0,.35)}
+/* menu recolhido (desktop): sem barra de rolagem à vista — continua rolando com a roda/toque e a barra volta ao abrir */
+@media(min-width:981px){
+  .app:not(.pinned) .side:not(:hover):not(:has(:focus-visible)) nav{scrollbar-width:none;scrollbar-gutter:auto}
+  .app:not(.pinned) .side:not(:hover):not(:has(:focus-visible)) nav::-webkit-scrollbar{display:none}
+}
