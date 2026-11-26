@@ -224,22 +224,26 @@ setInterval(async () => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) recarregarETela(); });
 
 /* ---------- acesso: configuração inicial, login, troca de senha ---------- */
-const SVG_SKY = '<svg class="ab-sky" viewBox="0 0 800 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false"><g fill="currentColor"><rect x="20" y="120" width="60" height="100"/><rect x="95" y="70" width="50" height="150"/><rect x="160" y="110" width="70" height="110"/><rect x="245" y="40" width="56" height="180"/><rect x="316" y="95" width="46" height="125"/><rect x="378" y="60" width="64" height="160"/><rect x="458" y="125" width="54" height="95"/><rect x="528" y="30" width="48" height="190"/><rect x="592" y="85" width="62" height="135"/><rect x="670" y="115" width="50" height="105"/><rect x="735" y="75" width="45" height="145"/></g></svg>';
-const LOGIN_ITENS = [['🏗️', 'Obras e andamento', 'passos, custo e holograma em tempo real'], ['📦', 'Estoque, compras e contratos', 'tudo ligado ao custo da obra'], ['💰', 'Financeiro e vendas', 'contas, baixas, parcelas e unidades'], ['📊', 'Painel de inteligência', 'indicadores para decidir com segurança']];
+/** Cena animada da obra (img/obra.svg) injetada inline para o CSS interno animar; em tela estreita enquadra o prédio e o guindaste. */
+let obraSvg = null;
+async function cenaObra() {
+  const alvo = $('#scene'); if (!alvo) return;
+  try { if (!obraSvg) obraSvg = await (await fetch('img/obra.svg')).text(); } catch (e) { return; }
+  if (!$('#scene')) return; $('#scene').innerHTML = obraSvg;
+  const sv = $('#scene svg'); if (!sv) return;
+  const ajusta = () => { const r = innerWidth / Math.max(innerHeight, 1), w = Math.min(1600, 900 * r); sv.setAttribute('viewBox', r >= 1600 / 900 ? '0 0 1600 900' : `${Math.max(0, Math.min(1600 - w, (r < 1 ? 360 : 560) - w / 2))} 0 ${w} 900`); };
+  ajusta(); window.addEventListener('resize', ajusta);
+}
 function tela(html) {
   $('.app').hidden = true; $('#fab').hidden = true; const a = $('#auth'); a.hidden = false;
   a.innerHTML = `<div class="auth-wrap">
-    <section class="auth-brand"><div class="ab-glow"></div>${SVG_SKY}
-      <img class="ab-logo" src="img/logo.png" alt="Império Negócios Imobiliários" width="720" height="566">
-      <h2>Sua operação inteira,<br><span>sob o seu comando.</span></h2>
-      <ul class="ab-list">${LOGIN_ITENS.map(x => `<li><i aria-hidden="true">${x[0]}</i><div><b>${x[1]}</b><small>${x[2]}</small></div></li>`).join('')}</ul>
-      <small class="ab-foot">Império ERP · acesso restrito a usuários autorizados</small>
-    </section>
-    <section class="auth-pane">
-      <button class="icon-btn auth-tema" id="authTema" type="button" aria-label="Alternar tema claro e escuro">🌗</button>
-      <div class="auth-box"><img class="ab-logo-m" src="img/logo.png" alt="Império Negócios Imobiliários" width="720" height="566">${html}</div>
-    </section></div>`;
-  $('#authTema').onclick = () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; try { localStorage.setItem('imperio_theme', t); } catch (e) { /* ignora */ } };
+    <div class="scene" id="scene" aria-hidden="true"></div><div class="scene-veil" aria-hidden="true"></div>
+    <main class="auth-center">
+      <img class="auth-logo" src="img/logo.png" alt="Império Negócios Imobiliários" width="800" height="624">
+      <div class="auth-box">${html}</div>
+      <p class="auth-foot">Acesso restrito a usuários autorizados</p>
+    </main></div>`;
+  cenaObra();
   a.querySelectorAll('input[type=password]').forEach(inp => {   // mostrar/ocultar senha + aviso de Caps Lock
     const w = document.createElement('span'); w.className = 'pw'; inp.parentNode.insertBefore(w, inp); w.appendChild(inp);
     const b = document.createElement('button'); b.type = 'button'; b.className = 'pw-t'; b.setAttribute('aria-label', 'Mostrar senha'); b.setAttribute('aria-pressed', 'false'); b.textContent = '👁'; w.appendChild(b);
@@ -247,7 +251,7 @@ function tela(html) {
     b.onclick = () => { const ver = inp.type === 'password'; inp.type = ver ? 'text' : 'password'; b.setAttribute('aria-pressed', ver); b.setAttribute('aria-label', ver ? 'Ocultar senha' : 'Mostrar senha'); b.textContent = ver ? '🙈' : '👁'; inp.focus(); };
     const cl = e => { caps.hidden = !(e.getModifierState && e.getModifierState('CapsLock')); }; inp.addEventListener('keydown', cl); inp.addEventListener('keyup', cl); inp.addEventListener('blur', () => { caps.hidden = true; });
   });
-  const f = a.querySelector('input'); if (f) f.focus();
+  const f = a.querySelector('input'); if (f) f.focus({ preventScroll: true });
 }
 /** Envia o formulário de acesso com o botão em "aguarde", sem permitir duplo clique. */
 async function enviarAcesso(f, fn) { const b = f.querySelector('button.btn'), t = b.textContent; b.disabled = true; b.classList.add('load'); b.textContent = 'Aguarde…'; try { await fn(); } finally { if (b.isConnected) { b.disabled = false; b.classList.remove('load'); b.textContent = t; } } }

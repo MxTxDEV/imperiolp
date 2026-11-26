@@ -16,7 +16,7 @@ const db = require('../../server/db');
     const p = await (await b.newContext({ viewport: { width: 1440, height: 900 }, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' })).newPage(); p.on('pageerror', e => erros.push(e.message));
     await p.goto(URL); await p.waitForSelector('#fl');
     /* tela de acesso: marca carregada, mostrar/ocultar senha, aviso de credencial errada sem travar o botão */
-    assert.ok(await p.evaluate(() => [...document.images].length >= 2 && [...document.images].every(i => i.complete && i.naturalWidth > 0)), 'logo da tela de login carregada');
+    assert.ok(await p.evaluate(() => [...document.images].length >= 1 && [...document.images].every(i => i.complete && i.naturalWidth > 0) && !!document.querySelector('#scene svg')), 'logo e cena animada da tela de login carregadas');
     await p.fill('input[name=email]', 'e2e@teste.com'); await p.fill('input[name=senha]', 'errada12345');
     assert.equal(await p.getAttribute('input[name=senha]', 'type'), 'password'); await p.click('.pw-t'); assert.equal(await p.getAttribute('input[name=senha]', 'type'), 'text'); await p.click('.pw-t');
     await p.click('#fl button.btn'); await p.waitForFunction(() => document.querySelector('#fe') && document.querySelector('#fe').textContent.length > 0);
